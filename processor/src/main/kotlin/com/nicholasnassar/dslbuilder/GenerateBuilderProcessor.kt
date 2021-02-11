@@ -30,6 +30,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
     private val valueAnnotation = Value::class.java.canonicalName
 
+    private val collectionToMutableClasses = setOf("List", "Set").map {
+        ClassName("kotlin.collections", it) to ClassName(
+            "kotlin.collections",
+            "Mutable$it"
+        )
+    }.toMap()
+
     override fun finish() {
 
     }
@@ -130,7 +137,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val propertyType = parameter.type
         val propertyTypeName = propertyType.asTypeName()
 
-        if (propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName) {
+        if (propertyTypeName is ParameterizedTypeName && collectionToMutableClasses.containsKey(propertyTypeName.rawType)) {
+            val singlePropertyName = propertyName.dropLast(1)
+
+            classBuilder.addFunction(
+                FunSpec.builder(singlePropertyName).addParameter("value", propertyTypeName).addCode("""
+                    
+                """.trimIndent()).build()
+            )
+        } else if (propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName) {
             val staticPropertyName = propertyName.substring(0, propertyName.length - DYNAMIC_VALUE_SUFFIX.length)
 
             val staticValueType = propertyTypeName.typeArguments[0]
