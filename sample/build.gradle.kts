@@ -11,10 +11,10 @@ repositories {
     google()
 }
 
-idea {
-    module {
+sourceSets {
+    main {
         java {
-            generatedSourceDirs.add(file("build/generated/ksp/main/kotlin"))
+            srcDir("build/generated/ksp/main/kotlin")
         }
     }
 }
