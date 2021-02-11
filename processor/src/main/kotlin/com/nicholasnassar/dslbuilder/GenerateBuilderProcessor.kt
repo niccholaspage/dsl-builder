@@ -137,15 +137,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val propertyType = parameter.type
         val propertyTypeName = propertyType.asTypeName()
 
-        if (propertyTypeName is ParameterizedTypeName && collectionToMutableClasses.containsKey(propertyTypeName.rawType)) {
-            val singlePropertyName = propertyName.dropLast(1)
-
-            classBuilder.addFunction(
-                FunSpec.builder(singlePropertyName).addParameter("value", propertyTypeName).addCode("""
-                    
-                """.trimIndent()).build()
-            )
-        } else if (propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName) {
+        if (propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName) {
             val staticPropertyName = propertyName.substring(0, propertyName.length - DYNAMIC_VALUE_SUFFIX.length)
 
             val staticValueType = propertyTypeName.typeArguments[0]
@@ -176,11 +168,35 @@ class GenerateBuilderProcessor : SymbolProcessor {
             )
         }
 
-        classBuilder.addProperty(
-            PropertySpec.builder(propertyName, propertyTypeName.copy(nullable = true)).mutable(true)
-                .initializer("null")
-                .build()
-        )
+        if (propertyTypeName is ParameterizedTypeName && collectionToMutableClasses.containsKey(propertyTypeName.rawType)) {
+            val singleValueType = propertyTypeName.typeArguments[0]
+
+            val mutableCollectionType =
+                collectionToMutableClasses[propertyTypeName.rawType]!!.parameterizedBy(singleValueType)
+
+            val simpleCollectionName = propertyTypeName.rawType.simpleName
+
+            classBuilder.addProperty(
+                PropertySpec.builder(propertyName, mutableCollectionType)
+                    .initializer("mutable${simpleCollectionName}Of()").build()
+            )
+
+            val singlePropertyName = propertyName.dropLast(1)
+
+            classBuilder.addFunction(
+                FunSpec.builder(singlePropertyName).addParameter("value", singleValueType).addCode(
+                    """
+                        $propertyName.add(value)
+                    """.trimIndent()
+                ).build()
+            )
+        } else {
+            classBuilder.addProperty(
+                PropertySpec.builder(propertyName, propertyTypeName.copy(nullable = true)).mutable(true)
+                    .initializer("null")
+                    .build()
+            )
+        }
     }
 
     inner class BuilderVisitor : KSVisitorVoid() {
