@@ -20,7 +20,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     lateinit var codeGenerator: CodeGenerator
     lateinit var logger: KSPLogger
-    lateinit var dynamicValueClass: ClassName
+
+    private lateinit var contextClass: ClassName
+    private lateinit var dynamicValueClass: ClassName
+    private lateinit var staticDynamicValueClass: ClassName
+    private lateinit var computedDynamicValueClass: ClassName
+    private lateinit var rollingDynamicValueClass: ClassName
 
     private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
     private val valueAnnotation = Value::class.java.canonicalName
@@ -38,11 +43,25 @@ class GenerateBuilderProcessor : SymbolProcessor {
         this.codeGenerator = codeGenerator
         this.logger = logger
 
+        val contextClassName = options["context_class"]
+        require(contextClassName != null) { "context_class cannot be null!" }
+        contextClass = ClassName.bestGuess(contextClassName)
+
         val dynamicValueClassName = options["dynamic_value_class"]
-
         require(dynamicValueClassName != null) { "dynamic_value_class cannot be null!" }
-
         dynamicValueClass = ClassName.bestGuess(dynamicValueClassName)
+
+        val staticDynamicValueClassName = options["static_dynamic_value_class"]
+        require(staticDynamicValueClassName != null) { "static_dynamic_value_class cannot be null!" }
+        staticDynamicValueClass = ClassName.bestGuess(staticDynamicValueClassName)
+
+        val computedDynamicValueClassName = options["computed_dynamic_value_class"]
+        require(computedDynamicValueClassName != null) { "computed_dynamic_value_class cannot be null!" }
+        computedDynamicValueClass = ClassName.bestGuess(computedDynamicValueClassName)
+
+        val rollingDynamicValueClassName = options["rolling_dynamic_value_class"]
+        require(rollingDynamicValueClassName != null) { "rolling_dynamic_value_class cannot be null!" }
+        rollingDynamicValueClass = ClassName.bestGuess(rollingDynamicValueClassName)
     }
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -68,6 +87,44 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
     }
 
+    private fun generateStaticPropertySettingDynamic(
+        propertyName: String,
+        staticPropertyName: String,
+        staticValueType: TypeName
+    ): PropertySpec {
+        return PropertySpec.builder(staticPropertyName, staticValueType.copy(nullable = true)).mutable(true)
+            .initializer("null")
+            .setter(
+                FunSpec.setterBuilder().addParameter("value", staticValueType).addCode(
+                    """
+                            $propertyName = if (value == null) {
+                                null
+                            } else {
+                                %T(value)
+                            }
+                            field = value
+                        """.trimIndent(), staticDynamicValueClass
+                ).build()
+            )
+            .build()
+    }
+
+    private fun generateFunctionSettingDynamic(
+        propertyName: String,
+        functionName: String,
+        staticValueType: TypeName,
+        dynamicValueClass: TypeName,
+    ): FunSpec {
+        return FunSpec.builder(functionName)
+            .addParameter("init", LambdaTypeName.get(contextClass, emptyList(), staticValueType))
+            .addCode(
+                """
+                        $propertyName = %T(init)
+                    """.trimIndent(), dynamicValueClass
+            )
+            .build()
+    }
+
     fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter) {
         val propertyName = parameter.name!!.asString()
         val propertyType = parameter.type
@@ -79,17 +136,29 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val staticValueType = propertyTypeName.typeArguments[0]
 
             classBuilder.addProperty(
-                PropertySpec.builder(staticPropertyName, staticValueType.copy(nullable = true)).mutable(true)
-                    .initializer("null")
-                    .setter(
-                        FunSpec.setterBuilder().addParameter("value", staticValueType).addCode("""
-                            $propertyName = StaticDynamicValue(value)
-                            field = value
-                        """.trimIndent()).build()
-                    )
-                    .build()
+                generateStaticPropertySettingDynamic(
+                    propertyName,
+                    staticPropertyName,
+                    staticValueType
+                )
             )
-        } else {
+
+            classBuilder.addFunction(
+                generateFunctionSettingDynamic(
+                    propertyName,
+                    staticPropertyName,
+                    staticValueType,
+                    computedDynamicValueClass
+                )
+            )
+            classBuilder.addFunction(
+                generateFunctionSettingDynamic(
+                    propertyName,
+                    "rolling${staticPropertyName.capitalize()}",
+                    staticValueType,
+                    rollingDynamicValueClass
+                )
+            )
         }
 
         classBuilder.addProperty(

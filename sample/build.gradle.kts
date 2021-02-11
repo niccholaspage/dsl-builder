@@ -26,5 +26,9 @@ dependencies {
 }
 
 ksp {
+    arg("context_class", "com.example.Context")
     arg("dynamic_value_class", "com.example.DynamicValue")
+    arg("static_dynamic_value_class", "com.example.StaticDynamicValue")
+    arg("computed_dynamic_value_class", "com.example.ComputedDynamicValue")
+    arg("rolling_dynamic_value_class", "com.example.RollingDynamicValue")
 }
