@@ -1,6 +1,7 @@
 plugins {
     id("com.google.devtools.ksp")
     kotlin("jvm")
+    idea
 }
 
 version = "0.0.1-SNAPSHOT"
@@ -10,10 +11,10 @@ repositories {
     google()
 }
 
-sourceSets {
-    main {
+idea {
+    module {
         java {
-            srcDir(file("sample/build/generated/ksp/src/main/kotlin"))
+            generatedSourceDirs.add(file("build/generated/ksp/main/kotlin"))
         }
     }
 }
