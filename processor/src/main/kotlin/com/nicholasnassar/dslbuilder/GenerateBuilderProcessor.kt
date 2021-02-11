@@ -5,10 +5,8 @@ import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.annotation.Value
-import com.squareup.kotlinpoet.ClassName
-import com.squareup.kotlinpoet.FileSpec
-import com.squareup.kotlinpoet.PropertySpec
-import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.*
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import java.io.OutputStream
 
 fun OutputStream.appendText(str: String) {
@@ -52,16 +50,28 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return ret
     }
 
+    private fun KSTypeReference.asTypeName(): TypeName {
+        val type = resolve()
+        val packageName = type.declaration.packageName.asString()
+        val simpleName = type.declaration.simpleName.asString()
+
+        val typeParameters = type.arguments.map { it.type!!.asTypeName() }
+
+        return if (typeParameters.isNotEmpty()) {
+            ClassName(packageName, simpleName).parameterizedBy(typeParameters)
+        } else {
+            ClassName(packageName, simpleName)
+        }
+    }
+
     fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter) {
         val propertyName = parameter.name!!.asString()
-        val propertyType = parameter.type.resolve()
-
-        val packageName = propertyType.declaration.packageName.asString()
-        val simpleName = propertyType.declaration.simpleName.asString()
-        val poetType = ClassName(packageName, simpleName).copy(nullable = true)
+        val propertyType = parameter.type
 
         classBuilder.addProperty(
-            PropertySpec.builder(propertyName, poetType).mutable(true).initializer("null").build()
+            PropertySpec.builder(propertyName, propertyType.asTypeName().copy(nullable = true)).mutable(true)
+                .initializer("null")
+                .build()
         )
     }
 
