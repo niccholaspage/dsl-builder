@@ -14,6 +14,10 @@ fun OutputStream.appendText(str: String) {
 }
 
 class GenerateBuilderProcessor : SymbolProcessor {
+    companion object {
+        private const val DYNAMIC_VALUE_SUFFIX = "DynamicValue"
+    }
+
     lateinit var codeGenerator: CodeGenerator
     lateinit var logger: KSPLogger
     lateinit var dynamicValueClass: ClassName
@@ -67,9 +71,29 @@ class GenerateBuilderProcessor : SymbolProcessor {
     fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter) {
         val propertyName = parameter.name!!.asString()
         val propertyType = parameter.type
+        val propertyTypeName = propertyType.asTypeName()
+
+        if (propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName) {
+            val staticPropertyName = propertyName.substring(0, propertyName.length - DYNAMIC_VALUE_SUFFIX.length)
+
+            val staticValueType = propertyTypeName.typeArguments[0]
+
+            classBuilder.addProperty(
+                PropertySpec.builder(staticPropertyName, staticValueType.copy(nullable = true)).mutable(true)
+                    .initializer("null")
+                    .setter(
+                        FunSpec.setterBuilder().addParameter("value", staticValueType).addCode("""
+                            $propertyName = StaticDynamicValue(value)
+                            field = value
+                        """.trimIndent()).build()
+                    )
+                    .build()
+            )
+        } else {
+        }
 
         classBuilder.addProperty(
-            PropertySpec.builder(propertyName, propertyType.asTypeName().copy(nullable = true)).mutable(true)
+            PropertySpec.builder(propertyName, propertyTypeName.copy(nullable = true)).mutable(true)
                 .initializer("null")
                 .build()
         )

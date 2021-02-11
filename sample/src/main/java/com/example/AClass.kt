@@ -5,6 +5,6 @@ import com.nicholasnassar.dslbuilder.annotation.Value
 import java.io.OutputStream
 
 @GenerateBuilder
-class AClass(private val outputStream: OutputStream, @Value val b: String, @Value val c: DynamicValue<Double>) {
+class AClass(private val outputStream: OutputStream, @Value val b: String, @Value val cDynamicValue: DynamicValue<Double>) {
 
 }
