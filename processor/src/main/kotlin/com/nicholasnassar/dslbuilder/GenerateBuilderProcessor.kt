@@ -30,6 +30,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
     private val valueAnnotation = Value::class.java.canonicalName
 
+    private val setClass = ClassName("kotlin.collections", "Set")
+    private val starProjection = WildcardTypeName.producerOf(
+        ANY.copy(
+            true
+        )
+    )
+
     private val collectionToMutableClasses = setOf("List", "Set").map {
         ClassName("kotlin.collections", it) to ClassName(
             "kotlin.collections",
@@ -132,12 +139,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter) {
+    fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
         val propertyName = parameter.name!!.asString()
         val propertyType = parameter.type
         val propertyTypeName = propertyType.asTypeName()
+        var isDynamic = false
 
         if (propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName) {
+            isDynamic = true
+
             val staticPropertyName = propertyName.substring(0, propertyName.length - DYNAMIC_VALUE_SUFFIX.length)
 
             val staticValueType = propertyTypeName.typeArguments[0]
@@ -197,6 +207,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .build()
             )
         }
+
+        return isDynamic
     }
 
     inner class BuilderVisitor : KSVisitorVoid() {
@@ -215,11 +227,30 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(className)
 
+            val dynamicValues = mutableSetOf<String>()
+
             function.parameters.forEach { parameter ->
                 if (parameter.annotations.any { it.annotationType.resolve().declaration.qualifiedName?.asString() == valueAnnotation }) {
-                    generateProperty(classBuilder, parameter)
+                    if (generateProperty(classBuilder, parameter)) {
+                        dynamicValues.add(parameter.name!!.asString())
+                    }
                 }
             }
+
+            val codeBody = if (dynamicValues.isEmpty()) {
+                "return emptySet()"
+            } else {
+                "return setOf(${dynamicValues.joinToString()}).filterNotNull().toSet()"
+            }
+
+            classBuilder.addFunction(
+                FunSpec.builder("getImmediateDynamicValues")
+                    .returns(
+                        setClass.parameterizedBy(
+                            dynamicValueClass.parameterizedBy(starProjection)
+                        )
+                    ).addCode(codeBody).build()
+            )
 
             fileBuilder.addType(classBuilder.build())
 
