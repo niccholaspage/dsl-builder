@@ -165,7 +165,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    private fun generateCollectionProperty(propertyName: String, propertyTypeName: ParameterizedTypeName): PropertySpec {
+    private fun generateCollectionProperty(
+        propertyName: String,
+        propertyTypeName: ParameterizedTypeName
+    ): PropertySpec {
         val singleValueType = propertyTypeName.typeArguments[0]
 
         val mutableCollectionType =
@@ -174,7 +177,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val simpleCollectionName = propertyTypeName.rawType.simpleName
 
         return PropertySpec.builder(propertyName, mutableCollectionType)
-                .initializer("mutable${simpleCollectionName}Of()").build()
+            .initializer("mutable${simpleCollectionName}Of()").build()
     }
 
     private fun generateBasicProperty(propertyName: String, propertyTypeName: TypeName): PropertySpec {
@@ -183,8 +186,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    private fun generateCollectionAddFunction(propertyName: String, singleValueType: TypeName): FunSpec {
-        return FunSpec.builder(propertyName.dropLast(1)).addParameter("value", singleValueType).addCode(
+    private fun generateCollectionAddFunction(propertyName: String, propertyTypeName: ParameterizedTypeName): FunSpec {
+        return FunSpec.builder(propertyName.dropLast(1)).addParameter("value", propertyTypeName.typeArguments[0]).addCode(
             """
                         $propertyName.add(value)
                     """.trimIndent()
@@ -240,6 +243,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return isDynamic
     }
 
+    private fun generateImmediateDynamicValuesGetter(dynamicValues: Set<String>): FunSpec {
+        val codeBody = if (dynamicValues.isEmpty()) {
+            "return emptySet()"
+        } else {
+            "return setOf(${dynamicValues.joinToString()}).filterNotNull().toSet()"
+        }
+
+        return FunSpec.builder("getImmediateDynamicValues")
+            .returns(setClass.parameterizedBy(dynamicValueClass.parameterizedBy(starProjection))).addCode(codeBody)
+            .build()
+    }
+
     inner class BuilderVisitor : KSVisitorVoid() {
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
             classDeclaration.primaryConstructor!!.accept(this, data)
@@ -262,20 +277,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 }
             }
 
-            val codeBody = if (dynamicValues.isEmpty()) {
-                "return emptySet()"
-            } else {
-                "return setOf(${dynamicValues.joinToString()}).filterNotNull().toSet()"
-            }
-
-            classBuilder.addFunction(
-                FunSpec.builder("getImmediateDynamicValues")
-                    .returns(
-                        setClass.parameterizedBy(
-                            dynamicValueClass.parameterizedBy(starProjection)
-                        )
-                    ).addCode(codeBody).build()
-            )
+            classBuilder.addFunction(generateImmediateDynamicValuesGetter(dynamicValues))
 
             classesToWrite.add(
                 ClassInfo(
