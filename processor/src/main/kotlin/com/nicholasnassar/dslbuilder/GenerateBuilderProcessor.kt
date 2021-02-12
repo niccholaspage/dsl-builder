@@ -165,6 +165,32 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
+    private fun generateCollectionProperty(propertyName: String, propertyTypeName: ParameterizedTypeName): PropertySpec {
+        val singleValueType = propertyTypeName.typeArguments[0]
+
+        val mutableCollectionType =
+            collectionToMutableClasses[propertyTypeName.rawType]!!.parameterizedBy(singleValueType)
+
+        val simpleCollectionName = propertyTypeName.rawType.simpleName
+
+        return PropertySpec.builder(propertyName, mutableCollectionType)
+                .initializer("mutable${simpleCollectionName}Of()").build()
+    }
+
+    private fun generateBasicProperty(propertyName: String, propertyTypeName: TypeName): PropertySpec {
+        return PropertySpec.builder(propertyName, propertyTypeName.copy(nullable = true)).mutable(true)
+            .initializer("null")
+            .build()
+    }
+
+    private fun generateCollectionAddFunction(propertyName: String, singleValueType: TypeName): FunSpec {
+        return FunSpec.builder(propertyName.dropLast(1)).addParameter("value", singleValueType).addCode(
+            """
+                        $propertyName.add(value)
+                    """.trimIndent()
+        ).build()
+    }
+
     fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
         val propertyName = parameter.name!!.asString()
         val propertyType = parameter.type
@@ -205,33 +231,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
 
         if (propertyTypeName is ParameterizedTypeName && collectionToMutableClasses.containsKey(propertyTypeName.rawType)) {
-            val singleValueType = propertyTypeName.typeArguments[0]
-
-            val mutableCollectionType =
-                collectionToMutableClasses[propertyTypeName.rawType]!!.parameterizedBy(singleValueType)
-
-            val simpleCollectionName = propertyTypeName.rawType.simpleName
-
-            classBuilder.addProperty(
-                PropertySpec.builder(propertyName, mutableCollectionType)
-                    .initializer("mutable${simpleCollectionName}Of()").build()
-            )
-
-            val singlePropertyName = propertyName.dropLast(1)
-
-            classBuilder.addFunction(
-                FunSpec.builder(singlePropertyName).addParameter("value", singleValueType).addCode(
-                    """
-                        $propertyName.add(value)
-                    """.trimIndent()
-                ).build()
-            )
+            classBuilder.addProperty(generateCollectionProperty(propertyName, propertyTypeName))
+            classBuilder.addFunction(generateCollectionAddFunction(propertyName, propertyTypeName))
         } else {
-            classBuilder.addProperty(
-                PropertySpec.builder(propertyName, propertyTypeName.copy(nullable = true)).mutable(true)
-                    .initializer("null")
-                    .build()
-            )
+            classBuilder.addProperty(generateBasicProperty(propertyName, propertyTypeName))
         }
 
         return isDynamic
