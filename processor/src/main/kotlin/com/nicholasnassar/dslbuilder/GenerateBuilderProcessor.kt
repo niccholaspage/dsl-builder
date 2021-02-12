@@ -187,11 +187,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     private fun generateCollectionAddFunction(propertyName: String, propertyTypeName: ParameterizedTypeName): FunSpec {
-        return FunSpec.builder(propertyName.dropLast(1)).addParameter("value", propertyTypeName.typeArguments[0]).addCode(
-            """
+        return FunSpec.builder(propertyName.dropLast(1)).addParameter("value", propertyTypeName.typeArguments[0])
+            .addCode(
+                """
                         $propertyName.add(value)
                     """.trimIndent()
-        ).build()
+            ).build()
     }
 
     fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
@@ -243,14 +244,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return isDynamic
     }
 
-    private fun generateImmediateDynamicValuesGetter(dynamicValues: Set<String>): FunSpec {
+    private fun generateImmediateDynamicValuesGetter(baseClassType: ClassName, dynamicValues: Set<String>): FunSpec {
         val codeBody = if (dynamicValues.isEmpty()) {
             "return emptySet()"
         } else {
-            "return setOf(${dynamicValues.joinToString()}).filterNotNull().toSet()"
+            "return setOf(${dynamicValues.joinToString { "instance.$it" }}).filterNotNull().toSet()"
         }
 
         return FunSpec.builder("getImmediateDynamicValues")
+            .addParameter("instance", baseClassType)
             .returns(setClass.parameterizedBy(dynamicValueClass.parameterizedBy(starProjection))).addCode(codeBody)
             .build()
     }
@@ -263,7 +265,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
         override fun visitFunctionDeclaration(function: KSFunctionDeclaration, data: Unit) {
             val parent = function.parentDeclaration as KSClassDeclaration
             val packageName = parent.containingFile!!.packageName.asString()
-            val className = "${parent.simpleName.asString()}Builder"
+            val baseClassName = parent.simpleName.asString()
+            val className = "${baseClassName}Builder"
+            val baseClassType = ClassName(packageName, baseClassName)
 
             val classBuilder = TypeSpec.classBuilder(className)
 
@@ -277,7 +281,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 }
             }
 
-            classBuilder.addFunction(generateImmediateDynamicValuesGetter(dynamicValues))
+            classBuilder.addType(
+                TypeSpec.companionObjectBuilder()
+                    .addFunction(generateImmediateDynamicValuesGetter(baseClassType, dynamicValues)).build()
+            )
 
             classesToWrite.add(
                 ClassInfo(
