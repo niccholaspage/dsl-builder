@@ -4,7 +4,6 @@ import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
-import com.nicholasnassar.dslbuilder.annotation.Value
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import java.io.OutputStream
@@ -28,7 +27,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private lateinit var rollingDynamicValueClass: ClassName
 
     private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
-    private val valueAnnotation = Value::class.java.canonicalName
 
     private val setClass = ClassName("kotlin.collections", "Set")
     private val starProjection = WildcardTypeName.producerOf(
@@ -257,6 +255,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
+    private fun generateBuildFunction(baseClassType: ClassName, parametersInConstructor: List<KSValueParameter>): FunSpec {
+        return FunSpec.builder("build").returns(baseClassType).addCode("""
+            return %T(${parametersInConstructor.joinToString()})
+        """.trimIndent(), baseClassType).build()
+    }
+
     inner class BuilderVisitor : KSVisitorVoid() {
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
             classDeclaration.primaryConstructor!!.accept(this, data)
@@ -273,13 +277,16 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val dynamicValues = mutableSetOf<String>()
 
+            // Theoretically, we override the class declaration visit method and only accept
+            // on a class's primary constructor, so the parameters below should only refer to
+            // the properties in the primary constructor.
             function.parameters.forEach { parameter ->
-                if (parameter.annotations.any { it.annotationType.resolve().declaration.qualifiedName?.asString() == valueAnnotation }) {
-                    if (generateProperty(classBuilder, parameter)) {
-                        dynamicValues.add(parameter.name!!.asString())
-                    }
+                if (generateProperty(classBuilder, parameter)) {
+                    dynamicValues.add(parameter.name!!.asString())
                 }
             }
+
+            classBuilder.addFunction(generateBuildFunction(baseClassType, function.parameters))
 
             classBuilder.addType(
                 TypeSpec.companionObjectBuilder()
