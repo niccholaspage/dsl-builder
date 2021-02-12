@@ -44,8 +44,34 @@ class GenerateBuilderProcessor : SymbolProcessor {
         )
     }.toMap()
 
-    override fun finish() {
+    class ClassInfo(
+        val dependencies: Dependencies,
+        val packageName: String,
+        val className: String,
+        val classBuilder: TypeSpec.Builder
+    )
 
+    private val classesToWrite = mutableListOf<ClassInfo>()
+
+    override fun finish() {
+        classesToWrite.forEach {
+            val packageName = it.packageName
+            val className = it.className
+            val classBuilder = it.classBuilder
+
+            val file =
+                codeGenerator.createNewFile(it.dependencies, packageName, className)
+
+            val fileBuilder = FileSpec.builder(packageName, className)
+
+            fileBuilder.addType(classBuilder.build())
+
+            file.writer().use { outputSteam ->
+                fileBuilder.build().writeTo(outputSteam)
+            }
+
+            file.close()
+        }
     }
 
     override fun init(
@@ -220,10 +246,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val parent = function.parentDeclaration as KSClassDeclaration
             val packageName = parent.containingFile!!.packageName.asString()
             val className = "${parent.simpleName.asString()}Builder"
-            val file =
-                codeGenerator.createNewFile(Dependencies(true, function.containingFile!!), packageName, className)
-
-            val fileBuilder = FileSpec.builder(packageName, className)
 
             val classBuilder = TypeSpec.classBuilder(className)
 
@@ -252,13 +274,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     ).addCode(codeBody).build()
             )
 
-            fileBuilder.addType(classBuilder.build())
-
-            file.writer().use {
-                fileBuilder.build().writeTo(it)
-            }
-
-            file.close()
+            classesToWrite.add(
+                ClassInfo(
+                    Dependencies(true, function.containingFile!!),
+                    packageName,
+                    className,
+                    classBuilder
+                )
+            )
         }
     }
 
