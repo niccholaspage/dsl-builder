@@ -255,10 +255,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    private fun generateBuildFunction(baseClassType: ClassName, parametersInConstructor: List<KSValueParameter>): FunSpec {
-        return FunSpec.builder("build").returns(baseClassType).addCode("""
-            return %T(${parametersInConstructor.joinToString()})
-        """.trimIndent(), baseClassType).build()
+    private fun generateBuildFunction(
+        baseClassType: ClassName,
+        parametersInConstructor: List<KSValueParameter>
+    ): FunSpec {
+        val codeBlock = CodeBlock.builder()
+
+        parametersInConstructor.filter { !it.type.resolve().isMarkedNullable }.forEach {
+            val parameterName = it.name!!.asString()
+            codeBlock.add("""require($parameterName != null) { "$parameterName cannot be null!" }""" + "\n")
+        }
+
+        codeBlock.add("return %T(${parametersInConstructor.joinToString {it.name!!.asString() + "!!"}})", baseClassType)
+
+        return FunSpec.builder("build").returns(baseClassType).addCode(codeBlock.build()).build()
     }
 
     inner class BuilderVisitor : KSVisitorVoid() {
