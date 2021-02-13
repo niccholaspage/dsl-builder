@@ -2,6 +2,8 @@ val kspVersion: String by project
 
 plugins {
     kotlin("jvm")
+    id("com.vanniktech.maven.publish")
+    id("org.jetbrains.dokka")
 }
 
 group = "com.nicholasnassar.dslbuilder"
