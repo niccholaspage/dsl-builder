@@ -101,6 +101,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .build()
             )
 
+            classBuilder.addProperty(PropertySpec.builder("parentCollection", mutableCollectionType, KModifier.PRIVATE).initializer("parentCollection").build())
+
             val fileBuilder = FileSpec.builder(packageName, className)
 
             fileBuilder.addType(classBuilder.build())
@@ -220,6 +222,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val simpleCollectionName = propertyTypeName.rawType.simpleName
 
         return PropertySpec.builder(propertyName, mutableCollectionType)
+            .addModifiers(KModifier.PRIVATE)
             .initializer("mutable${simpleCollectionName}Of()").build()
     }
 
