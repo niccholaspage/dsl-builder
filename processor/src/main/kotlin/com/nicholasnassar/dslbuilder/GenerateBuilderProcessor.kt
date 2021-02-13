@@ -101,7 +101,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .build()
             )
 
-            classBuilder.addProperty(PropertySpec.builder("parentCollection", mutableCollectionType, KModifier.PRIVATE).initializer("parentCollection").build())
+            classBuilder.addProperty(
+                PropertySpec.builder("parentCollection", mutableCollectionType, KModifier.PRIVATE)
+                    .initializer("parentCollection").build()
+            )
 
             val fileBuilder = FileSpec.builder(packageName, className)
 
@@ -237,8 +240,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
         propertyName: String,
         propertyTypeName: ParameterizedTypeName
     ): FunSpec {
-        // TODO: Make this not clearly fail if the type argument is another parameterized type.
-        val typeArgumentClass = propertyTypeName.typeArguments[0] as ClassName
+        val typeArgumentClass = when (val typeArgument = propertyTypeName.typeArguments[0]) {
+            is ClassName -> {
+                typeArgument
+            }
+            is ParameterizedTypeName -> {
+                typeArgument.rawType
+            }
+            else -> {
+                throw IllegalArgumentException("???")
+            }
+        }
+
         val updatedPackageName = if (typeArgumentClass.packageName == "kotlin") {
             "com.nicholasnassar.dslbuilder.kotlin"
         } else {
