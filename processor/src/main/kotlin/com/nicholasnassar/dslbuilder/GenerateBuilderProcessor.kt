@@ -25,6 +25,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private lateinit var staticDynamicValueClass: ClassName
     private lateinit var computedDynamicValueClass: ClassName
     private lateinit var rollingDynamicValueClass: ClassName
+    private lateinit var dslMarkerAnnotationClass: ClassName
 
     private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
 
@@ -93,8 +94,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(className)
 
+            classBuilder.addAnnotation(dslMarkerAnnotationClass)
+
             classBuilder.primaryConstructor(
-                FunSpec.constructorBuilder().addParameter(ParameterSpec("parentCollection", mutableCollectionType)).build()
+                FunSpec.constructorBuilder().addParameter(ParameterSpec("parentCollection", mutableCollectionType))
+                    .build()
             )
 
             val fileBuilder = FileSpec.builder(packageName, className)
@@ -137,6 +141,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val rollingDynamicValueClassName = options["rolling_dynamic_value_class"]
         require(rollingDynamicValueClassName != null) { "rolling_dynamic_value_class cannot be null!" }
         rollingDynamicValueClass = ClassName.bestGuess(rollingDynamicValueClassName)
+
+        val dslMarkerAnnotationClassName = options["dsl_marker_annotation_class"]
+        require(dslMarkerAnnotationClassName != null) { "dsl_marker_annotation_class cannot be null!" }
+        dslMarkerAnnotationClass = ClassName.bestGuess(dslMarkerAnnotationClassName)
     }
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
@@ -221,7 +229,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    private fun generateCollectionLambda(containingFile: KSFile, propertyName: String, propertyTypeName: ParameterizedTypeName): FunSpec {
+    private fun generateCollectionLambda(
+        containingFile: KSFile,
+        propertyName: String,
+        propertyTypeName: ParameterizedTypeName
+    ): FunSpec {
         // TODO: Make this not clearly fail if the type argument is another parameterized type.
         val typeArgumentClass = propertyTypeName.typeArguments[0] as ClassName
         val updatedPackageName = if (typeArgumentClass.packageName == "kotlin") {
@@ -341,6 +353,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val containingFile = function.containingFile!!
 
             val classBuilder = TypeSpec.classBuilder(className)
+
+            classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
             val dynamicValues = mutableSetOf<String>()
 
