@@ -2,8 +2,7 @@ val kspVersion: String by project
 
 plugins {
     kotlin("jvm")
-    id("com.vanniktech.maven.publish")
-    id("org.jetbrains.dokka")
+    `maven-publish`
 }
 
 group = "com.nicholasnassar.dslbuilder"
@@ -24,3 +23,25 @@ sourceSets.main {
     java.srcDirs("src/main/kotlin")
 }
 
+publishing {
+    repositories {
+        maven {
+            name = "GitHubPackages"
+            url = uri("https://maven.pkg.github.com/OWNER/REPOSITORY")
+            credentials {
+                username = System.getenv("GITHUB_ACTOR")
+                password = System.getenv("GITHUB_TOKEN")
+            }
+        }
+    }
+
+    publications {
+        create<MavenPublication>("maven") {
+            groupId = group as String
+            artifactId = "dsl-builder-ksp"
+            version = project.version as String
+
+            from(components["java"])
+        }
+    }
+}
