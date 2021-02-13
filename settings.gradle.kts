@@ -13,5 +13,4 @@ pluginManagement {
 
 rootProject.name = "dsl-builder"
 
-include(":sample")
 include(":processor")
