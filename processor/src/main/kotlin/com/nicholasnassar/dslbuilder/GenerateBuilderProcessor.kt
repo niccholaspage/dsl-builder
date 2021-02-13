@@ -28,7 +28,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
 
+    private val mutableCollectionClass = ClassName("kotlin.collections", "MutableCollection")
     private val setClass = ClassName("kotlin.collections", "Set")
+    private val unitClass = ClassName("kotlin", "Unit")
     private val starProjection = WildcardTypeName.producerOf(
         ANY.copy(
             true
@@ -41,6 +43,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
             "Mutable$it"
         )
     }.toMap()
+
+    private val collectionBuildersToGenerate = mutableMapOf<ClassName, CollectionBuilderInfo>()
+
+    class CollectionBuilderInfo(
+        val collectionType: ClassName
+    ) {
+        val dependencyFiles = mutableSetOf<KSFile>()
+    }
 
     class ClassInfo(
         val dependencies: Dependencies,
@@ -66,6 +76,33 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             file.writer().use { outputSteam ->
                 fileBuilder.build().writeTo(outputSteam)
+            }
+
+            file.close()
+        }
+
+        // Now, let's generate our builders for our collections.
+        for ((builderClassName, collectionBuilderInfo) in collectionBuildersToGenerate) {
+            val valueType = collectionBuilderInfo.collectionType
+            val mutableCollectionType = mutableCollectionClass.parameterizedBy(valueType)
+            val dependencyFiles = collectionBuilderInfo.dependencyFiles.toTypedArray()
+
+            val packageName = builderClassName.packageName
+            val className = builderClassName.simpleName
+            val file = codeGenerator.createNewFile(Dependencies(true, *dependencyFiles), packageName, className)
+
+            val classBuilder = TypeSpec.classBuilder(className)
+
+            classBuilder.primaryConstructor(
+                FunSpec.constructorBuilder().addParameter(ParameterSpec("parentCollection", mutableCollectionType)).build()
+            )
+
+            val fileBuilder = FileSpec.builder(packageName, className)
+
+            fileBuilder.addType(classBuilder.build())
+
+            file.writer().use { outputStream ->
+                fileBuilder.build().writeTo(outputStream)
             }
 
             file.close()
@@ -184,16 +221,30 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    private fun generateCollectionAddFunction(propertyName: String, propertyTypeName: ParameterizedTypeName): FunSpec {
-        return FunSpec.builder(propertyName.dropLast(1)).addParameter("value", propertyTypeName.typeArguments[0])
+    private fun generateCollectionLambda(containingFile: KSFile, propertyName: String, propertyTypeName: ParameterizedTypeName): FunSpec {
+        // TODO: Make this not clearly fail if the type argument is another parameterized type.
+        val typeArgumentClass = propertyTypeName.typeArguments[0] as ClassName
+        val updatedPackageName = if (typeArgumentClass.packageName == "kotlin") {
+            "com.nicholasnassar.dslbuilder.kotlin"
+        } else {
+            typeArgumentClass.packageName
+        }
+        val multiBuilderClass = ClassName(updatedPackageName, typeArgumentClass.simpleName + "sBuilder")
+        collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
+            CollectionBuilderInfo(typeArgumentClass)
+        }.dependencyFiles.add(containingFile)
+        val builderLambda =
+            LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
+
+        return FunSpec.builder(propertyName).addParameter("init", builderLambda)
             .addCode(
                 """
-                        $propertyName.add(value)
-                    """.trimIndent()
+                        %T($propertyName).apply(init)
+                    """.trimIndent(), multiBuilderClass
             ).build()
     }
 
-    fun generateProperty(classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
+    fun generateProperty(containingFile: KSFile, classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
         val propertyName = parameter.name!!.asString()
         val propertyType = parameter.type
         val propertyTypeName = propertyType.asTypeName()
@@ -233,8 +284,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
 
         if (propertyTypeName is ParameterizedTypeName && collectionToMutableClasses.containsKey(propertyTypeName.rawType)) {
+            // If we have a collection, we should generate a nice property that accepts a lambda allowing
+            // you to add items to a collection.
             classBuilder.addProperty(generateCollectionProperty(propertyName, propertyTypeName))
-            classBuilder.addFunction(generateCollectionAddFunction(propertyName, propertyTypeName))
+            classBuilder.addFunction(generateCollectionLambda(containingFile, propertyName, propertyTypeName))
         } else {
             classBuilder.addProperty(generateBasicProperty(propertyName, propertyTypeName))
         }
@@ -266,7 +319,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
             codeBlock.add("require($parameterName != null) { %S }\n", "$parameterName cannot be null!")
         }
 
-        codeBlock.add("return %T(${parametersInConstructor.joinToString {it.name!!.asString() + "!!"}})", baseClassType)
+        codeBlock.add(
+            "return %T(${parametersInConstructor.joinToString { it.name!!.asString() + "!!" }})",
+            baseClassType
+        )
 
         return FunSpec.builder("build").returns(baseClassType).addCode(codeBlock.build()).build()
     }
@@ -282,6 +338,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val baseClassName = parent.simpleName.asString()
             val className = "${baseClassName}Builder"
             val baseClassType = ClassName(packageName, baseClassName)
+            val containingFile = function.containingFile!!
 
             val classBuilder = TypeSpec.classBuilder(className)
 
@@ -291,7 +348,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // on a class's primary constructor, so the parameters below should only refer to
             // the properties in the primary constructor.
             function.parameters.forEach { parameter ->
-                if (generateProperty(classBuilder, parameter)) {
+                if (generateProperty(containingFile, classBuilder, parameter)) {
                     dynamicValues.add(parameter.name!!.asString())
                 }
             }
@@ -305,7 +362,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             classesToWrite.add(
                 ClassInfo(
-                    Dependencies(true, function.containingFile!!),
+                    Dependencies(true, containingFile),
                     packageName,
                     className,
                     classBuilder
