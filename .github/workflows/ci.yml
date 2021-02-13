@@ -31,3 +31,5 @@ jobs:
         run: |
           rm -f ~/.gradle/caches/modules-2/modules-2.lock
           rm -f ~/.gradle/caches/modules-2/gc.properties
+      - name: Publish snapshot to GitHub Packages
+        run: ./gradlew publish
