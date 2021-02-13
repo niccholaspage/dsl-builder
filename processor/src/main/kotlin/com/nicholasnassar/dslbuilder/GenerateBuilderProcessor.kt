@@ -263,7 +263,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         parametersInConstructor.filter { !it.type.resolve().isMarkedNullable }.forEach {
             val parameterName = it.name!!.asString()
-            codeBlock.add("""require($parameterName != null) { "$parameterName cannot be null!" }""" + "\n")
+            codeBlock.add("require($parameterName != null) { %S }\n", "$parameterName cannot be null!")
         }
 
         codeBlock.add("return %T(${parametersInConstructor.joinToString {it.name!!.asString() + "!!"}})", baseClassType)
