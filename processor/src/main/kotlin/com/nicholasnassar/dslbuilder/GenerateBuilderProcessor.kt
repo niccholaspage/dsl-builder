@@ -6,19 +6,14 @@ import com.google.devtools.ksp.validate
 import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import java.io.OutputStream
-
-fun OutputStream.appendText(str: String) {
-    this.write(str.toByteArray())
-}
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
         private const val DYNAMIC_VALUE_SUFFIX = "DynamicValue"
     }
 
-    lateinit var codeGenerator: CodeGenerator
-    lateinit var logger: KSPLogger
+    private lateinit var codeGenerator: CodeGenerator
+    private lateinit var logger: KSPLogger
 
     private lateinit var contextClass: ClassName
     private lateinit var dynamicValueClass: ClassName
@@ -56,25 +51,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     class ClassInfo(
         val dependencies: Dependencies,
-        val packageName: String,
-        val className: String,
+        val builderClassName: ClassName,
         val classBuilder: TypeSpec.Builder
     )
 
-    private val classesToWrite = mutableListOf<ClassInfo>()
+    private val builderClassesToWrite = mutableMapOf<ClassName, ClassInfo>()
 
     override fun finish() {
-        classesToWrite.forEach {
-            val packageName = it.packageName
-            val className = it.className
-            val classBuilder = it.classBuilder
-
+        builderClassesToWrite.forEach { (className, classInfo) ->
             val file =
-                codeGenerator.createNewFile(it.dependencies, packageName, className)
+                codeGenerator.createNewFile(classInfo.dependencies, className.packageName, className.simpleName)
 
-            val fileBuilder = FileSpec.builder(packageName, className)
+            val fileBuilder = FileSpec.builder(className.packageName, className.simpleName)
 
-            fileBuilder.addType(classBuilder.build())
+            fileBuilder.addType(classInfo.classBuilder.build())
 
             file.writer().use { outputSteam ->
                 fileBuilder.build().writeTo(outputSteam)
@@ -111,10 +101,26 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .initializer("parentCollection").build()
             )
 
+            val functionName = collectionBuilderInfo.collectionTypeSingleItemName.decapitalize()
+
             classBuilder.addFunction(
-                FunSpec.builder(collectionBuilderInfo.collectionTypeSingleItemName.decapitalize())
+                FunSpec.builder(functionName)
                     .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
             )
+
+            val builderClassInfo = builderClassesToWrite[valueType]
+
+            if (builderClassInfo != null) {
+                classBuilder.addFunction(
+                    FunSpec.builder(functionName).addParameter(
+                        ParameterSpec.builder(
+                            "init",
+                            LambdaTypeName.get(builderClassInfo.builderClassName, emptyList(), unitClass)
+                        ).build()
+                    ).addCode("parentCollection.add(%T().apply(init).build())", builderClassInfo.builderClassName)
+                        .build()
+                )
+            }
 
             val fileBuilder = FileSpec.builder(packageName, className)
 
@@ -376,11 +382,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val parent = function.parentDeclaration as KSClassDeclaration
             val packageName = parent.containingFile!!.packageName.asString()
             val baseClassName = parent.simpleName.asString()
-            val className = "${baseClassName}Builder"
+            val builderClassName = ClassName(packageName, "${baseClassName}Builder")
             val baseClassType = ClassName(packageName, baseClassName)
             val containingFile = function.containingFile!!
 
-            val classBuilder = TypeSpec.classBuilder(className)
+            val classBuilder = TypeSpec.classBuilder(builderClassName)
 
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
@@ -402,14 +408,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .addFunction(generateImmediateDynamicValuesGetter(baseClassType, dynamicValues)).build()
             )
 
-            classesToWrite.add(
-                ClassInfo(
+            builderClassesToWrite[baseClassType] = ClassInfo(
 //                    Dependencies(true, containingFile),
-                    Dependencies.ALL_FILES,
-                    packageName,
-                    className,
-                    classBuilder
-                )
+                Dependencies.ALL_FILES,
+                builderClassName,
+                classBuilder
             )
         }
     }
