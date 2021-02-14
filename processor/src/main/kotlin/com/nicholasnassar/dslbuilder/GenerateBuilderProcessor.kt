@@ -91,7 +91,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val packageName = builderClassName.packageName
             val className = builderClassName.simpleName
-            val file = codeGenerator.createNewFile(Dependencies(true, *dependencyFiles), packageName, className)
+            val file = codeGenerator.createNewFile(
+//                Dependencies(true, *dependencyFiles),
+                Dependencies.ALL_FILES,
+                packageName, className
+            )
 
             val classBuilder = TypeSpec.classBuilder(className)
 
@@ -400,7 +404,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             classesToWrite.add(
                 ClassInfo(
-                    Dependencies(true, containingFile),
+//                    Dependencies(true, containingFile),
+                    Dependencies.ALL_FILES,
                     packageName,
                     className,
                     classBuilder
