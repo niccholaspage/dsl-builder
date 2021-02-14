@@ -48,7 +48,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val collectionBuildersToGenerate = mutableMapOf<ClassName, CollectionBuilderInfo>()
 
     class CollectionBuilderInfo(
-        val collectionType: ClassName
+        val collectionType: ClassName,
+        val collectionTypeSingleItemName: String,
     ) {
         val dependencyFiles = mutableSetOf<KSFile>()
     }
@@ -104,6 +105,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
             classBuilder.addProperty(
                 PropertySpec.builder("parentCollection", mutableCollectionType, KModifier.PRIVATE)
                     .initializer("parentCollection").build()
+            )
+
+            classBuilder.addFunction(
+                FunSpec.builder(collectionBuilderInfo.collectionTypeSingleItemName.decapitalize())
+                    .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
             )
 
             val fileBuilder = FileSpec.builder(packageName, className)
@@ -257,9 +263,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
         } else {
             typeArgumentClass.packageName
         }
-        val multiBuilderClass = ClassName(updatedPackageName, typeArgumentClass.simpleName + "sBuilder")
+
+        val collectionTypeSingleItemName = typeArgumentClass.simpleName
+        val multiBuilderClass = ClassName(updatedPackageName, collectionTypeSingleItemName + "sBuilder")
         collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
-            CollectionBuilderInfo(typeArgumentClass)
+            CollectionBuilderInfo(typeArgumentClass, collectionTypeSingleItemName)
         }.dependencyFiles.add(containingFile)
         val builderLambda =
             LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
