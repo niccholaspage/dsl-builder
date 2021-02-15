@@ -111,7 +111,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
             )
 
-            val builderClassInfo = builderClassesToWrite[valueType]
+            val rawValueType = if (valueType is ParameterizedTypeName) {
+                valueType.rawType
+            } else {
+                valueType
+            }
+
+            val builderClassInfo = builderClassesToWrite[rawValueType]
 
             if (builderClassInfo != null) {
                 classBuilder.addFunction(
