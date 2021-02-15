@@ -188,7 +188,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             else -> null
         }
 
-        return TypeVariableName(name.asString(), variance)
+        return TypeVariableName(name.asString(), this.bounds.map { it.asTypeName() }, variance)
     }
 
     private fun KSTypeArgument.asTypeName(): TypeName {
@@ -439,9 +439,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val typeVariableNames = parent.typeParameters.map { it.asTypeVariableName() }
 
-            typeVariableNames.forEach {
-                classBuilder.addTypeVariable(it)
-            }
+            classBuilder.addTypeVariables(typeVariableNames)
 
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
