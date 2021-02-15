@@ -344,7 +344,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return isDynamic
     }
 
-    private fun generateImmediateDynamicValuesGetter(baseClassType: ClassName, dynamicValues: Set<String>): FunSpec {
+    private fun generateImmediateDynamicValuesGetter(baseClassType: ClassName, dynamicValues: Set<String>, isGeneric: Boolean): FunSpec {
         val codeBody = if (dynamicValues.isEmpty()) {
             "return emptySet()"
         } else {
@@ -352,14 +352,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
 
         return FunSpec.builder("getImmediateDynamicValues")
-            .addParameter("instance", baseClassType)
+            .addParameter("instance", if (isGeneric) baseClassType.parameterizedBy(STAR) else baseClassType)
             .returns(setClass.parameterizedBy(dynamicValueClass.parameterizedBy(STAR))).addCode(codeBody)
             .build()
     }
 
     private fun generateBuildFunction(
         baseClassType: ClassName,
-        parametersInConstructor: List<KSValueParameter>
+        parametersInConstructor: List<KSValueParameter>,
+        typeVariableNames: List<TypeVariableName>
     ): FunSpec {
         val codeBlock = CodeBlock.builder()
 
@@ -373,7 +374,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
             baseClassType
         )
 
-        return FunSpec.builder("build").returns(baseClassType).addCode(codeBlock.build()).build()
+        val returnType = if (typeVariableNames.isEmpty()) {
+            baseClassType
+        } else {
+            baseClassType.parameterizedBy(typeVariableNames)
+        }
+
+        return FunSpec.builder("build").returns(returnType).addCode(codeBlock.build()).build()
     }
 
     inner class BuilderVisitor : KSVisitorVoid() {
@@ -391,16 +398,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(builderClassName)
 
-            parent.typeParameters.forEach {
+            val typeVariableNames = parent.typeParameters.map {
                 val variance = when (it.variance) {
                     Variance.COVARIANT -> KModifier.OUT
                     Variance.CONTRAVARIANT -> KModifier.IN
                     else -> null
                 }
 
-                val typeVariableName = TypeVariableName(it.name.asString(), variance)
+                TypeVariableName(it.name.asString(), variance)
+            }
 
-                classBuilder.addTypeVariable(typeVariableName)
+            typeVariableNames.forEach {
+                classBuilder.addTypeVariable(it)
             }
 
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
@@ -416,11 +425,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 }
             }
 
-            classBuilder.addFunction(generateBuildFunction(baseClassType, function.parameters))
+            classBuilder.addFunction(generateBuildFunction(baseClassType, function.parameters, typeVariableNames))
 
             classBuilder.addType(
                 TypeSpec.companionObjectBuilder()
-                    .addFunction(generateImmediateDynamicValuesGetter(baseClassType, dynamicValues)).build()
+                    .addFunction(generateImmediateDynamicValuesGetter(baseClassType, dynamicValues, typeVariableNames.isNotEmpty())).build()
             )
 
             builderClassesToWrite[baseClassType] = ClassInfo(
