@@ -38,7 +38,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val collectionBuildersToGenerate = mutableMapOf<ClassName, CollectionBuilderInfo>()
 
     class CollectionBuilderInfo(
-        val collectionType: ClassName,
+        val collectionType: TypeName,
         val collectionTypeSingleItemName: String,
     ) {
         val dependencyFiles = mutableSetOf<KSFile>()
@@ -84,6 +84,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(className)
 
+            val tTypeVariableName = TypeVariableName("T")
+
+            classBuilder.addTypeVariable(tTypeVariableName)
+
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
             classBuilder.primaryConstructor(
@@ -100,7 +104,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             classBuilder.addFunction(
                 FunSpec.builder(functionName)
-                    .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
+                    .addParameter("value", tTypeVariableName).addCode("parentCollection.add(value)").build()
             )
 
             val builderClassInfo = builderClassesToWrite[valueType]
@@ -255,7 +259,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
         propertyName: String,
         propertyTypeName: ParameterizedTypeName
     ): FunSpec? {
-        val rawTypeArgumentClass = when (val typeArgument = propertyTypeName.typeArguments[0]) {
+        val typeArgument = propertyTypeName.typeArguments[0]
+
+        val rawTypeArgumentClass = when (typeArgument) {
             is ClassName -> typeArgument
             is ParameterizedTypeName -> typeArgument.rawType
             is WildcardTypeName -> null
@@ -263,8 +269,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
 
         if (rawTypeArgumentClass != null) {
-            val updatedPackageName = if (rawTypeArgumentClass.packageName.startsWith("kotlin.")) {
-                rawTypeArgumentClass.packageName.replaceFirst("kotlin.", "com.nicholasnassar.dslbuilder.kotlin.")
+            val currentPackageName = rawTypeArgumentClass.packageName
+
+            val updatedPackageName = if (currentPackageName == "kotlin" || currentPackageName.startsWith("kotlin.")) {
+                rawTypeArgumentClass.packageName.replaceFirst("kotlin", "com.nicholasnassar.dslbuilder.kotlin")
             } else {
                 rawTypeArgumentClass.packageName
             }
@@ -272,7 +280,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val collectionTypeSingleItemName = rawTypeArgumentClass.simpleName
             val multiBuilderClass = ClassName(updatedPackageName, collectionTypeSingleItemName + "sBuilder")
             collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
-                CollectionBuilderInfo(rawTypeArgumentClass, collectionTypeSingleItemName)
+                CollectionBuilderInfo(typeArgument, collectionTypeSingleItemName)
             }.dependencyFiles.add(containingFile)
             val builderLambda =
                 LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
@@ -344,7 +352,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return isDynamic
     }
 
-    private fun generateImmediateDynamicValuesGetter(baseClassType: ClassName, dynamicValues: Set<String>, isGeneric: Boolean): FunSpec {
+    private fun generateImmediateDynamicValuesGetter(
+        baseClassType: ClassName,
+        dynamicValues: Set<String>,
+        isGeneric: Boolean
+    ): FunSpec {
         val codeBody = if (dynamicValues.isEmpty()) {
             "return emptySet()"
         } else {
@@ -429,7 +441,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             classBuilder.addType(
                 TypeSpec.companionObjectBuilder()
-                    .addFunction(generateImmediateDynamicValuesGetter(baseClassType, dynamicValues, typeVariableNames.isNotEmpty())).build()
+                    .addFunction(
+                        generateImmediateDynamicValuesGetter(
+                            baseClassType,
+                            dynamicValues,
+                            typeVariableNames.isNotEmpty()
+                        )
+                    ).build()
             )
 
             builderClassesToWrite[baseClassType] = ClassInfo(
