@@ -38,6 +38,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val collectionBuildersToGenerate = mutableMapOf<ClassName, CollectionBuilderInfo>()
 
     class CollectionBuilderInfo(
+        val typeVariableNames: List<TypeVariableName>,
         val collectionType: TypeName,
         val collectionTypeSingleItemName: String,
     ) {
@@ -84,9 +85,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(className)
 
-            val tTypeVariableName = TypeVariableName("T")
-
-            classBuilder.addTypeVariable(tTypeVariableName)
+            classBuilder.addTypeVariables(collectionBuilderInfo.typeVariableNames)
 
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
@@ -104,7 +103,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             classBuilder.addFunction(
                 FunSpec.builder(functionName)
-                    .addParameter("value", tTypeVariableName).addCode("parentCollection.add(value)").build()
+                    .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
             )
 
             val builderClassInfo = builderClassesToWrite[valueType]
@@ -176,16 +175,28 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return ret
     }
 
+    private fun KSTypeParameter.asTypeVariableName(): TypeVariableName {
+        val variance = when (variance) {
+            Variance.COVARIANT -> KModifier.OUT
+            Variance.CONTRAVARIANT -> KModifier.IN
+            else -> null
+        }
+
+        return TypeVariableName(name.asString(), variance)
+    }
+
+    private fun KSTypeArgument.asTypeName(): TypeName {
+        val argumentType = type ?: return STAR
+
+        return argumentType.asTypeName()
+    }
+
     private fun KSTypeReference.asTypeName(): TypeName {
         val type = resolve()
         val packageName = type.declaration.packageName.asString()
         val simpleName = type.declaration.simpleName.asString()
 
-        val typeParameters = type.arguments.map {
-            val argumentType = it.type ?: return@map STAR
-
-            argumentType.asTypeName()
-        }
+        val typeParameters = type.arguments.map { it.asTypeName() }
 
         return if (typeParameters.isNotEmpty()) {
             ClassName(packageName, simpleName).parameterizedBy(typeParameters)
@@ -255,6 +266,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     private fun generateCollectionLambda(
+        kotlinClass: KSClassDeclaration,
         containingFile: KSFile,
         propertyName: String,
         propertyTypeName: ParameterizedTypeName
@@ -277,10 +289,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 rawTypeArgumentClass.packageName
             }
 
+            val typeVariableNames = kotlinClass.typeParameters.map { it.asTypeVariableName() }
+
             val collectionTypeSingleItemName = rawTypeArgumentClass.simpleName
             val multiBuilderClass = ClassName(updatedPackageName, collectionTypeSingleItemName + "sBuilder")
             collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
-                CollectionBuilderInfo(typeArgument, collectionTypeSingleItemName)
+                CollectionBuilderInfo(typeVariableNames, typeArgument, collectionTypeSingleItemName)
             }.dependencyFiles.add(containingFile)
             val builderLambda =
                 LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
@@ -296,7 +310,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
     }
 
-    fun generateProperty(containingFile: KSFile, classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
+    fun generateProperty(kotlinClass: KSClassDeclaration, containingFile: KSFile, classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
         val propertyName = parameter.name!!.asString()
         val propertyType = parameter.type
         val propertyTypeName = propertyType.asTypeName()
@@ -340,7 +354,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // you to add items to a collection.
             classBuilder.addProperty(generateCollectionProperty(propertyName, propertyTypeName))
 
-            val collectionLambda = generateCollectionLambda(containingFile, propertyName, propertyTypeName)
+            val collectionLambda = generateCollectionLambda(kotlinClass, containingFile, propertyName, propertyTypeName)
 
             if (collectionLambda != null) {
                 classBuilder.addFunction(collectionLambda)
@@ -410,15 +424,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(builderClassName)
 
-            val typeVariableNames = parent.typeParameters.map {
-                val variance = when (it.variance) {
-                    Variance.COVARIANT -> KModifier.OUT
-                    Variance.CONTRAVARIANT -> KModifier.IN
-                    else -> null
-                }
-
-                TypeVariableName(it.name.asString(), variance)
-            }
+            val typeVariableNames = parent.typeParameters.map { it.asTypeVariableName() }
 
             typeVariableNames.forEach {
                 classBuilder.addTypeVariable(it)
@@ -432,7 +438,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // on a class's primary constructor, so the parameters below should only refer to
             // the properties in the primary constructor.
             function.parameters.forEach { parameter ->
-                if (generateProperty(containingFile, classBuilder, parameter)) {
+                if (generateProperty(parent, containingFile, classBuilder, parameter)) {
                     dynamicValues.add(parameter.name!!.asString())
                 }
             }
