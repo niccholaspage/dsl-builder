@@ -39,7 +39,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val collectionBuildersToGenerate = mutableMapOf<ClassName, CollectionBuilderInfo>()
 
     class CollectionBuilderInfo(
-        val typeVariableNames: List<TypeVariableName>,
         val collectionType: TypeName,
         val rawTypeArgumentClass: ClassName,
     ) {
@@ -74,6 +73,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         // Now, let's generate our builders for our collections.
         for ((builderClassName, collectionBuilderInfo) in collectionBuildersToGenerate) {
+            val rawTypeClass =
+                resolver.getClassDeclarationByName(resolver.getKSNameFromString(collectionBuilderInfo.rawTypeArgumentClass.canonicalName))!!
+
             val valueType = collectionBuilderInfo.collectionType
             val mutableCollectionType = mutableCollectionClass.parameterizedBy(valueType)
             val dependencyFiles = collectionBuilderInfo.dependencyFiles.toTypedArray()
@@ -88,7 +90,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(className)
 
-            classBuilder.addTypeVariables(collectionBuilderInfo.typeVariableNames)
+            classBuilder.addTypeVariables(rawTypeClass.typeParameters.map { it.asTypeVariableName() })
 
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
@@ -282,7 +284,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     private fun generateCollectionLambda(
-        kotlinClass: KSClassDeclaration,
         containingFile: KSFile,
         propertyName: String,
         propertyTypeName: ParameterizedTypeName
@@ -295,26 +296,29 @@ class GenerateBuilderProcessor : SymbolProcessor {
             else -> throw IllegalArgumentException("????")
         }
 
-        val typeVariableNames = kotlinClass.typeParameters.map { it.asTypeVariableName() }
-
         val multiBuilderClass = convertCanonicalNameToMultiBuilder(rawTypeArgumentClass)
         collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
-            CollectionBuilderInfo(typeVariableNames, typeArgument, rawTypeArgumentClass)
+            CollectionBuilderInfo(typeArgument, rawTypeArgumentClass)
         }.dependencyFiles.add(containingFile)
 
+        val returnType = if (typeArgument is ParameterizedTypeName) {
+            multiBuilderClass.parameterizedBy(typeArgument.typeArguments)
+        } else {
+            multiBuilderClass
+        }
+
         val builderLambda =
-            LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
+            LambdaTypeName.get(returnType, emptyList(), unitClass)
 
         return FunSpec.builder(propertyName).addParameter("init", builderLambda)
             .addCode(
                 """
                     %T($propertyName).apply(init)
-                """.trimIndent(), multiBuilderClass
+                """.trimIndent(), returnType
             ).build()
     }
 
     fun generateProperty(
-        kotlinClass: KSClassDeclaration,
         containingFile: KSFile,
         classBuilder: TypeSpec.Builder,
         parameter: KSValueParameter
@@ -361,7 +365,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // If we have a collection, we should generate a nice property that accepts a lambda allowing
             // you to add items to a collection.
             classBuilder.addProperty(generateCollectionProperty(propertyName, propertyTypeName))
-            classBuilder.addFunction(generateCollectionLambda(kotlinClass, containingFile, propertyName, propertyTypeName))
+            classBuilder.addFunction(
+                generateCollectionLambda(
+                    containingFile,
+                    propertyName,
+                    propertyTypeName
+                )
+            )
         } else {
             classBuilder.addProperty(generateBasicProperty(propertyName, propertyTypeName))
         }
@@ -441,7 +451,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // on a class's primary constructor, so the parameters below should only refer to
             // the properties in the primary constructor.
             function.parameters.forEach { parameter ->
-                if (generateProperty(parent, containingFile, classBuilder, parameter)) {
+                if (generateProperty(containingFile, classBuilder, parameter)) {
                     dynamicValues.add(parameter.name!!.asString())
                 }
             }
