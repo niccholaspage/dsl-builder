@@ -55,10 +55,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     override fun finish() {
         builderClassesToWrite.forEach { (className, classInfo) ->
-            val file =
-                codeGenerator.createNewFile(classInfo.dependencies, className.packageName, className.simpleName)
+            val builderClass = classInfo.builderClassName
 
-            val fileBuilder = FileSpec.builder(className.packageName, className.simpleName)
+            val file =
+                codeGenerator.createNewFile(classInfo.dependencies, builderClass.packageName, builderClass.simpleName)
+
+            val fileBuilder = FileSpec.builder(builderClass.packageName, builderClass.simpleName)
 
             fileBuilder.addType(classInfo.classBuilder.build())
 
