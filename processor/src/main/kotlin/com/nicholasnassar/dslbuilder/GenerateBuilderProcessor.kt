@@ -391,6 +391,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(builderClassName)
 
+            parent.typeParameters.forEach {
+                val variance = when (it.variance) {
+                    Variance.COVARIANT -> KModifier.OUT
+                    Variance.CONTRAVARIANT -> KModifier.IN
+                    else -> null
+                }
+
+                val typeVariableName = TypeVariableName(it.name.asString(), variance)
+
+                classBuilder.addTypeVariable(typeVariableName)
+            }
+
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
             val dynamicValues = mutableSetOf<String>()
