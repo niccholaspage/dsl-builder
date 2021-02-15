@@ -120,13 +120,19 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val builderClassInfo = builderClassesToWrite[rawValueType]
 
             if (builderClassInfo != null) {
+                val returnType = if (valueType is ParameterizedTypeName) {
+                    builderClassInfo.builderClassName.parameterizedBy(valueType.typeArguments)
+                } else {
+                    builderClassInfo.builderClassName
+                }
+
                 classBuilder.addFunction(
                     FunSpec.builder(functionName).addParameter(
                         ParameterSpec.builder(
                             "init",
-                            LambdaTypeName.get(builderClassInfo.builderClassName, emptyList(), unitClass)
+                            LambdaTypeName.get(returnType, emptyList(), unitClass)
                         ).build()
-                    ).addCode("parentCollection.add(%T().apply(init).build())", builderClassInfo.builderClassName)
+                    ).addCode("parentCollection.add(%T().apply(init).build())", returnType)
                         .build()
                 )
             }
