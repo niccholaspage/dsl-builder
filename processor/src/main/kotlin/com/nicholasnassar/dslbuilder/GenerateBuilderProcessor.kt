@@ -14,6 +14,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     private lateinit var codeGenerator: CodeGenerator
     private lateinit var logger: KSPLogger
+    private lateinit var resolver: Resolver
 
     private lateinit var contextClass: ClassName
     private lateinit var dynamicValueClass: ClassName
@@ -40,7 +41,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     class CollectionBuilderInfo(
         val typeVariableNames: List<TypeVariableName>,
         val collectionType: TypeName,
-        val collectionTypeSingleItemName: String,
+        val rawTypeArgumentClass: ClassName,
     ) {
         val dependencyFiles = mutableSetOf<KSFile>()
     }
@@ -101,7 +102,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .initializer("parentCollection").build()
             )
 
-            val functionName = collectionBuilderInfo.collectionTypeSingleItemName.decapitalize()
+            val functionName = collectionBuilderInfo.rawTypeArgumentClass.simpleName.decapitalize()
 
             classBuilder.addFunction(
                 FunSpec.builder(functionName)
@@ -169,6 +170,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
+        this.resolver = resolver
         val symbols = resolver.getSymbolsWithAnnotation(generateBuilderAnnotation)
         val ret = symbols.filter { !it.validate() }
         symbols
@@ -267,52 +269,56 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
+    private fun convertCanonicalNameToMultiBuilder(className: ClassName): ClassName {
+        val currentPackageName = className.packageName
+
+        val updatedPackageName = if (currentPackageName == "kotlin" || currentPackageName.startsWith("kotlin.")) {
+            className.packageName.replaceFirst("kotlin", "com.nicholasnassar.dslbuilder.kotlin")
+        } else {
+            className.packageName
+        }
+
+        return ClassName(updatedPackageName, className.simpleName + "sBuilder")
+    }
+
     private fun generateCollectionLambda(
         kotlinClass: KSClassDeclaration,
         containingFile: KSFile,
         propertyName: String,
         propertyTypeName: ParameterizedTypeName
-    ): FunSpec? {
+    ): FunSpec {
         val typeArgument = propertyTypeName.typeArguments[0]
 
         val rawTypeArgumentClass = when (typeArgument) {
             is ClassName -> typeArgument
             is ParameterizedTypeName -> typeArgument.rawType
-            is WildcardTypeName -> null
             else -> throw IllegalArgumentException("????")
         }
 
-        if (rawTypeArgumentClass != null) {
-            val currentPackageName = rawTypeArgumentClass.packageName
+        val typeVariableNames = kotlinClass.typeParameters.map { it.asTypeVariableName() }
 
-            val updatedPackageName = if (currentPackageName == "kotlin" || currentPackageName.startsWith("kotlin.")) {
-                rawTypeArgumentClass.packageName.replaceFirst("kotlin", "com.nicholasnassar.dslbuilder.kotlin")
-            } else {
-                rawTypeArgumentClass.packageName
-            }
+        val multiBuilderClass = convertCanonicalNameToMultiBuilder(rawTypeArgumentClass)
+        collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
+            CollectionBuilderInfo(typeVariableNames, typeArgument, rawTypeArgumentClass)
+        }.dependencyFiles.add(containingFile)
 
-            val typeVariableNames = kotlinClass.typeParameters.map { it.asTypeVariableName() }
+        val builderLambda =
+            LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
 
-            val collectionTypeSingleItemName = rawTypeArgumentClass.simpleName
-            val multiBuilderClass = ClassName(updatedPackageName, collectionTypeSingleItemName + "sBuilder")
-            collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
-                CollectionBuilderInfo(typeVariableNames, typeArgument, collectionTypeSingleItemName)
-            }.dependencyFiles.add(containingFile)
-            val builderLambda =
-                LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
-
-            return FunSpec.builder(propertyName).addParameter("init", builderLambda)
-                .addCode(
-                    """
-                        %T($propertyName).apply(init)
-                    """.trimIndent(), multiBuilderClass
-                ).build()
-        } else {
-            return null
-        }
+        return FunSpec.builder(propertyName).addParameter("init", builderLambda)
+            .addCode(
+                """
+                    %T($propertyName).apply(init)
+                """.trimIndent(), multiBuilderClass
+            ).build()
     }
 
-    fun generateProperty(kotlinClass: KSClassDeclaration, containingFile: KSFile, classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
+    fun generateProperty(
+        kotlinClass: KSClassDeclaration,
+        containingFile: KSFile,
+        classBuilder: TypeSpec.Builder,
+        parameter: KSValueParameter
+    ): Boolean {
         val propertyName = parameter.name!!.asString()
         val propertyType = parameter.type
         val propertyTypeName = propertyType.asTypeName()
@@ -355,12 +361,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // If we have a collection, we should generate a nice property that accepts a lambda allowing
             // you to add items to a collection.
             classBuilder.addProperty(generateCollectionProperty(propertyName, propertyTypeName))
-
-            val collectionLambda = generateCollectionLambda(kotlinClass, containingFile, propertyName, propertyTypeName)
-
-            if (collectionLambda != null) {
-                classBuilder.addFunction(collectionLambda)
-            }
+            classBuilder.addFunction(generateCollectionLambda(kotlinClass, containingFile, propertyName, propertyTypeName))
         } else {
             classBuilder.addProperty(generateBasicProperty(propertyName, propertyTypeName))
         }
