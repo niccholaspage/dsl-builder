@@ -27,11 +27,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val mutableCollectionClass = ClassName("kotlin.collections", "MutableCollection")
     private val setClass = ClassName("kotlin.collections", "Set")
     private val unitClass = ClassName("kotlin", "Unit")
-    private val starProjection = WildcardTypeName.producerOf(
-        ANY.copy(
-            true
-        )
-    )
 
     private val collectionToMutableClasses = setOf("List", "Set").map {
         ClassName("kotlin.collections", it) to ClassName(
@@ -182,7 +177,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val packageName = type.declaration.packageName.asString()
         val simpleName = type.declaration.simpleName.asString()
 
-        val typeParameters = type.arguments.map { it.type!!.asTypeName() }
+        val typeParameters = type.arguments.map {
+            val argumentType = it.type ?: return@map STAR
+
+            argumentType.asTypeName()
+        }
 
         return if (typeParameters.isNotEmpty()) {
             ClassName(packageName, simpleName).parameterizedBy(typeParameters)
@@ -255,39 +254,38 @@ class GenerateBuilderProcessor : SymbolProcessor {
         containingFile: KSFile,
         propertyName: String,
         propertyTypeName: ParameterizedTypeName
-    ): FunSpec {
-        val typeArgumentClass = when (val typeArgument = propertyTypeName.typeArguments[0]) {
-            is ClassName -> {
-                typeArgument
-            }
-            is ParameterizedTypeName -> {
-                typeArgument.rawType
-            }
-            else -> {
-                throw IllegalArgumentException("???")
-            }
+    ): FunSpec? {
+        val rawTypeArgumentClass = when (val typeArgument = propertyTypeName.typeArguments[0]) {
+            is ClassName -> typeArgument
+            is ParameterizedTypeName -> typeArgument.rawType
+            is WildcardTypeName -> null
+            else -> throw IllegalArgumentException("????")
         }
 
-        val updatedPackageName = if (typeArgumentClass.packageName == "kotlin") {
-            "com.nicholasnassar.dslbuilder.kotlin"
-        } else {
-            typeArgumentClass.packageName
-        }
+        if (rawTypeArgumentClass != null) {
+            val updatedPackageName = if (rawTypeArgumentClass.packageName.startsWith("kotlin.")) {
+                rawTypeArgumentClass.packageName.replaceFirst("kotlin.", "com.nicholasnassar.dslbuilder.kotlin.")
+            } else {
+                rawTypeArgumentClass.packageName
+            }
 
-        val collectionTypeSingleItemName = typeArgumentClass.simpleName
-        val multiBuilderClass = ClassName(updatedPackageName, collectionTypeSingleItemName + "sBuilder")
-        collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
-            CollectionBuilderInfo(typeArgumentClass, collectionTypeSingleItemName)
-        }.dependencyFiles.add(containingFile)
-        val builderLambda =
-            LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
+            val collectionTypeSingleItemName = rawTypeArgumentClass.simpleName
+            val multiBuilderClass = ClassName(updatedPackageName, collectionTypeSingleItemName + "sBuilder")
+            collectionBuildersToGenerate.getOrPut(multiBuilderClass) {
+                CollectionBuilderInfo(rawTypeArgumentClass, collectionTypeSingleItemName)
+            }.dependencyFiles.add(containingFile)
+            val builderLambda =
+                LambdaTypeName.get(multiBuilderClass, emptyList(), unitClass)
 
-        return FunSpec.builder(propertyName).addParameter("init", builderLambda)
-            .addCode(
-                """
+            return FunSpec.builder(propertyName).addParameter("init", builderLambda)
+                .addCode(
+                    """
                         %T($propertyName).apply(init)
                     """.trimIndent(), multiBuilderClass
-            ).build()
+                ).build()
+        } else {
+            return null
+        }
     }
 
     fun generateProperty(containingFile: KSFile, classBuilder: TypeSpec.Builder, parameter: KSValueParameter): Boolean {
@@ -333,7 +331,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // If we have a collection, we should generate a nice property that accepts a lambda allowing
             // you to add items to a collection.
             classBuilder.addProperty(generateCollectionProperty(propertyName, propertyTypeName))
-            classBuilder.addFunction(generateCollectionLambda(containingFile, propertyName, propertyTypeName))
+
+            val collectionLambda = generateCollectionLambda(containingFile, propertyName, propertyTypeName)
+
+            if (collectionLambda != null) {
+                classBuilder.addFunction(collectionLambda)
+            }
         } else {
             classBuilder.addProperty(generateBasicProperty(propertyName, propertyTypeName))
         }
@@ -350,7 +353,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         return FunSpec.builder("getImmediateDynamicValues")
             .addParameter("instance", baseClassType)
-            .returns(setClass.parameterizedBy(dynamicValueClass.parameterizedBy(starProjection))).addCode(codeBody)
+            .returns(setClass.parameterizedBy(dynamicValueClass.parameterizedBy(STAR))).addCode(codeBody)
             .build()
     }
 
@@ -409,8 +412,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
             )
 
             builderClassesToWrite[baseClassType] = ClassInfo(
-//                    Dependencies(true, containingFile),
-                Dependencies.ALL_FILES,
+                Dependencies(true, containingFile),
+//                Dependencies.ALL_FILES,
                 builderClassName,
                 classBuilder
             )
