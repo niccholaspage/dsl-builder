@@ -4,6 +4,7 @@ import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
+import com.nicholasnassar.dslbuilder.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 
@@ -24,6 +25,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private lateinit var dslMarkerAnnotationClass: ClassName
 
     private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
+    private val nullValueAnnotation = NullValue::class.java.canonicalName
 
     private val mutableCollectionClass = ClassName("kotlin.collections", "MutableCollection")
     private val setClass = ClassName("kotlin.collections", "Set")
@@ -439,15 +441,17 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
 
         codeBlock.add(
-            "return %T(${parametersInConstructor.joinToString {
-                val param = it.parameter.name!!.asString()
-                
-                if (it.isNotNullable) {
-                    "$param!!"
-                } else {
-                    param
+            "return %T(${
+                parametersInConstructor.joinToString {
+                    val param = it.parameter.name!!.asString()
+
+                    if (it.isNotNullable) {
+                        "$param!!"
+                    } else {
+                        param
+                    }
                 }
-            }})",
+            })",
             baseClassType
         )
 
@@ -493,6 +497,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
             }
 
             val wrappedParameters = function.parameters.map {
+                val nullValue = it.annotations.find { annotation ->
+                    annotation.annotationType.resolve().declaration.qualifiedName?.asString() == nullValueAnnotation
+                }
+
+                if (nullValue != null) {
+                    throw IllegalArgumentException("Null value found!")
+                }
+
                 val resolvedType = it.type.resolve()
                 val isNotNullable = resolvedType.nullability == Nullability.NOT_NULL
 
