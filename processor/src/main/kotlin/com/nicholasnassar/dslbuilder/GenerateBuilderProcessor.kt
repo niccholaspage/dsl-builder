@@ -85,7 +85,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 valueType.rawType.parameterizedBy(fixedTypeVariableName)
             } else {
                 fixedTypeVariableName = UNIT
-                
+
                 valueType
             }
 
@@ -424,20 +424,30 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
+    class WrappedParameter(val parameter: KSValueParameter, val isNotNullable: Boolean)
+
     private fun generateBuildFunction(
         baseClassType: ClassName,
-        parametersInConstructor: List<KSValueParameter>,
+        parametersInConstructor: List<WrappedParameter>,
         typeVariableNames: List<TypeVariableName>
     ): FunSpec {
         val codeBlock = CodeBlock.builder()
 
-        parametersInConstructor.filter { !it.type.resolve().isMarkedNullable }.forEach {
-            val parameterName = it.name!!.asString()
+        parametersInConstructor.filter { it.isNotNullable }.forEach {
+            val parameterName = it.parameter.name!!.asString()
             codeBlock.add("require($parameterName != null) { %S }\n", "$parameterName cannot be null!")
         }
 
         codeBlock.add(
-            "return %T(${parametersInConstructor.joinToString { it.name!!.asString() + "!!" }})",
+            "return %T(${parametersInConstructor.joinToString {
+                val param = it.parameter.name!!.asString()
+                
+                if (it.isNotNullable) {
+                    "$param!!"
+                } else {
+                    param
+                }
+            }})",
             baseClassType
         )
 
@@ -482,7 +492,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 }
             }
 
-            classBuilder.addFunction(generateBuildFunction(baseClassType, function.parameters, typeVariableNames))
+            val wrappedParameters = function.parameters.map {
+                val resolvedType = it.type.resolve()
+                val isNotNullable = resolvedType.nullability == Nullability.NOT_NULL
+
+                WrappedParameter(it, isNotNullable)
+            }
+
+            classBuilder.addFunction(generateBuildFunction(baseClassType, wrappedParameters, typeVariableNames))
 
             classBuilder.addType(
                 TypeSpec.companionObjectBuilder()
