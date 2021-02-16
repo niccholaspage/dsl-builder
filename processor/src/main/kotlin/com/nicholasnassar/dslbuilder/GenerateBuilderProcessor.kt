@@ -77,10 +77,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 resolver.getClassDeclarationByName(resolver.getKSNameFromString(collectionBuilderInfo.rawTypeArgumentClass.canonicalName))!!
 
             val valueType = collectionBuilderInfo.collectionType
+            val fixedTypeVariableName: TypeName
 
             val fixedType = if (valueType is ParameterizedTypeName) {
-                valueType.rawType.parameterizedBy(TypeVariableName("T"))
+                fixedTypeVariableName = TypeVariableName(rawTypeClass.typeParameters[0].name.asString())
+
+                valueType.rawType.parameterizedBy(fixedTypeVariableName)
             } else {
+                fixedTypeVariableName = UNIT
+                
                 valueType
             }
 
@@ -132,7 +137,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             if (builderClassInfo != null) {
                 val returnType = if (valueType is ParameterizedTypeName) {
-                    builderClassInfo.builderClassName.parameterizedBy(valueType.typeArguments)
+                    builderClassInfo.builderClassName.parameterizedBy(fixedTypeVariableName)
                 } else {
                     builderClassInfo.builderClassName
                 }
