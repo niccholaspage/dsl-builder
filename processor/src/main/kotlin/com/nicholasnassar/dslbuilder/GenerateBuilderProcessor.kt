@@ -77,7 +77,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 resolver.getClassDeclarationByName(resolver.getKSNameFromString(collectionBuilderInfo.rawTypeArgumentClass.canonicalName))!!
 
             val valueType = collectionBuilderInfo.collectionType
-            val mutableCollectionType = mutableCollectionClass.parameterizedBy(valueType)
+
+            val fixedType = if (valueType is ParameterizedTypeName) {
+                valueType.rawType.parameterizedBy(TypeVariableName("T"))
+            } else {
+                valueType
+            }
+
+            val mutableCollectionType = mutableCollectionClass.parameterizedBy(fixedType)
             val dependencyFiles = collectionBuilderInfo.dependencyFiles.toTypedArray()
 
             val packageName = builderClassName.packageName
@@ -112,7 +119,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             classBuilder.addFunction(
                 FunSpec.builder(functionName)
-                    .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
+                    .addParameter("value", fixedType).addCode("parentCollection.add(value)").build()
             )
 
             val rawValueType = if (valueType is ParameterizedTypeName) {
