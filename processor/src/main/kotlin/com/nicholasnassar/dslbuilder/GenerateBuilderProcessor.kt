@@ -314,13 +314,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }.dependencyFiles.add(containingFile)
 
         val returnType = if (typeArgument is ParameterizedTypeName) {
-            multiBuilderClass.parameterizedBy(typeArgument.typeArguments.map {
-                if (it is TypeVariableName) {
-                    TypeVariableName(it.name, it.bounds, null)
-                } else {
-                    it
-                }
-            })
+            multiBuilderClass.parameterizedBy(typeArgument.typeArguments)
         } else {
             multiBuilderClass
         }
