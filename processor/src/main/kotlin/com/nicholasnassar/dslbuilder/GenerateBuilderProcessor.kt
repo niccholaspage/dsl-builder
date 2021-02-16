@@ -90,7 +90,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(className)
 
-            classBuilder.addTypeVariables(rawTypeClass.typeParameters.map { it.asTypeVariableName() })
+            classBuilder.addTypeVariables(rawTypeClass.typeParameters.map {
+                val typeVariableName = it.asTypeVariableName()
+
+                TypeVariableName(typeVariableName.name, typeVariableName.bounds, null)
+            })
 
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
