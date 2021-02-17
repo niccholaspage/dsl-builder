@@ -54,6 +54,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     )
 
     private val builderClassesToWrite = mutableMapOf<ClassName, ClassInfo>()
+    private val subTypes = mutableMapOf<ClassName, MutableList<ClassName>>()
 
     override fun finish() {
         builderClassesToWrite.forEach { (className, classInfo) ->
@@ -128,6 +129,16 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 FunSpec.builder(functionName)
                     .addParameter("value", fixedType).addCode("parentCollection.add(value)").build()
             )
+
+            subTypes[valueType]?.forEach {
+                val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
+
+                classBuilder.addFunction(
+                    FunSpec.builder(it.simpleName.decapitalize())
+                        .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
+                        .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
+                )
+            }
 
             val rawValueType = if (valueType is ParameterizedTypeName) {
                 valueType.rawType
@@ -476,6 +487,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return FunSpec.builder("build").returns(returnType).addCode(codeBlock.build()).build()
     }
 
+    fun getBuilderName(simpleName: String): String {
+        return "${simpleName}Builder"
+    }
+
     inner class BuilderVisitor : KSVisitorVoid() {
         override fun visitClassDeclaration(classDeclaration: KSClassDeclaration, data: Unit) {
             classDeclaration.primaryConstructor!!.accept(this, data)
@@ -485,9 +500,26 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val parent = function.parentDeclaration as KSClassDeclaration
             val packageName = parent.containingFile!!.packageName.asString()
             val baseClassName = parent.simpleName.asString()
-            val builderClassName = ClassName(packageName, "${baseClassName}Builder")
+            val builderClassName = ClassName(packageName, getBuilderName(baseClassName))
             val baseClassType = ClassName(packageName, baseClassName)
             val containingFile = function.containingFile!!
+
+            val superTypes = parent.superTypes
+
+            if (superTypes.isNotEmpty()) {
+                val subClass = ClassName(packageName, baseClassName)
+
+                superTypes.forEach {
+                    val declaration = it.resolve().declaration
+
+                    if (declaration is KSClassDeclaration) {
+                        val superClass =
+                            ClassName(declaration.packageName.asString(), declaration.simpleName.asString())
+
+                        subTypes.getOrPut(superClass) { mutableListOf() }.add(subClass)
+                    }
+                }
+            }
 
             val classBuilder = TypeSpec.classBuilder(builderClassName)
 
