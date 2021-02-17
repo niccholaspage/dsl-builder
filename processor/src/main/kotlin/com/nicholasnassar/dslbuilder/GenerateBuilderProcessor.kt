@@ -7,10 +7,13 @@ import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import com.squareup.kotlinpoet.jvm.jvmWildcard
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
         private const val DYNAMIC_VALUE_SUFFIX = "DynamicValue"
+
+        private val STAR_PROJECTION = WildcardTypeName.producerOf(ANY.copy(nullable = true))
     }
 
     private lateinit var codeGenerator: CodeGenerator
@@ -167,7 +170,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         beginning.parameterizedBy(typeParameters)
                     }
 
-                    val listType = mutableCollectionClass.parameterizedBy(valueType.rawType.parameterizedBy(typeParameters))
+                    val listType = mutableCollectionClass.parameterizedBy(valueType)
 
                     classBuilder.addFunction(
                         FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
