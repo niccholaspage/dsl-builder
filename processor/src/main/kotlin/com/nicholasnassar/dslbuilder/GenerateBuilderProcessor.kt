@@ -104,12 +104,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
             )
 
             val classBuilder = TypeSpec.classBuilder(className)
-
-            classBuilder.addTypeVariables(rawTypeClass.typeParameters.map {
+            val parameters = rawTypeClass.typeParameters.map {
                 val typeVariableName = it.asTypeVariableName()
 
                 TypeVariableName(typeVariableName.name, typeVariableName.bounds, null)
-            })
+            }
+
+            classBuilder.addTypeVariables(parameters)
 
             classBuilder.addAnnotation(dslMarkerAnnotationClass)
 
@@ -130,21 +131,36 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .addParameter("value", fixedType).addCode("parentCollection.add(value)").build()
             )
 
+            if (valueType is ParameterizedTypeName) {
+                subTypes[valueType.rawType]?.forEach {
+                    val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
+
+                    val parameterizedBuilderClass = ClassName(packageName, className).parameterizedBy(valueType.typeArguments)
+
+                    classBuilder.addFunction(
+                        FunSpec.builder(it.simpleName.decapitalize()).receiver(parameterizedBuilderClass)
+                            .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
+                            .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
+                    )
+                }
+            } else {
+                subTypes[valueType]?.forEach {
+                    val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
+
+                    classBuilder.addFunction(
+                        FunSpec.builder(it.simpleName.decapitalize())
+                            .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
+                            .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
+                    )
+                }
+            }
+
             val rawValueType = if (valueType is ParameterizedTypeName) {
                 valueType.rawType
             } else {
                 valueType
             }
 
-            subTypes[rawValueType]?.forEach {
-                val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
-
-                classBuilder.addFunction(
-                    FunSpec.builder(it.simpleName.decapitalize())
-                        .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
-                        .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
-                )
-            }
 
             val builderClassInfo = builderClassesToWrite[rawValueType]
 
