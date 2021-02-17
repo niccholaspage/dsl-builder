@@ -170,7 +170,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         beginning.parameterizedBy(typeParameters)
                     }
 
-                    val listType = mutableCollectionClass.parameterizedBy(valueType)
+                    val listType = mutableCollectionClass.parameterizedBy(if (valueType is ParameterizedTypeName) {
+                        valueType.rawType.parameterizedBy(STAR_PROJECTION)
+                    } else {
+                        valueType
+                    })
 
                     classBuilder.addFunction(
                         FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
