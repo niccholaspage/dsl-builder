@@ -273,7 +273,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private fun KSTypeArgument.asTypeName(): TypeName {
         val argumentType = type ?: return STAR
 
-        return argumentType.asTypeName()
+        return when (variance) {
+            Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(argumentType.asTypeName())
+            Variance.COVARIANT -> WildcardTypeName.producerOf(argumentType.asTypeName())
+            else -> argumentType.asTypeName()
+        }
     }
 
     private fun KSTypeReference.asTypeName(): TypeName {
