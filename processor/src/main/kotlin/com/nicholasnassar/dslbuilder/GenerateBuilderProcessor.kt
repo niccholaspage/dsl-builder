@@ -7,13 +7,19 @@ import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import com.squareup.kotlinpoet.jvm.jvmWildcard
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
         private const val DYNAMIC_VALUE_SUFFIX = "DynamicValue"
 
         private val STAR_PROJECTION = WildcardTypeName.producerOf(ANY.copy(nullable = true))
+
+        private val GENERATE_BUILDER_ANNOTATION = GenerateBuilder::class.java.canonicalName
+        private val NULL_VALUE_ANNOTATION = NullValue::class.java.canonicalName
+
+        private val MUTABLE_COLLECTION_CLASSES = ClassName("kotlin.collections", "MutableCollection")
+        private val SET_CLASS = ClassName("kotlin.collections", "Set")
+        private val UNIT_CLASS = ClassName("kotlin", "Unit")
     }
 
     private lateinit var codeGenerator: CodeGenerator
@@ -26,13 +32,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private lateinit var computedDynamicValueClass: ClassName
     private lateinit var rollingDynamicValueClass: ClassName
     private lateinit var dslMarkerAnnotationClass: ClassName
-
-    private val generateBuilderAnnotation = GenerateBuilder::class.java.canonicalName
-    private val nullValueAnnotation = NullValue::class.java.canonicalName
-
-    private val mutableCollectionClass = ClassName("kotlin.collections", "MutableCollection")
-    private val setClass = ClassName("kotlin.collections", "Set")
-    private val unitClass = ClassName("kotlin", "Unit")
 
     private val collectionToMutableClasses = setOf("List", "Set").map {
         ClassName("kotlin.collections", it) to ClassName(
@@ -95,7 +94,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 valueType
             }
 
-            val mutableCollectionType = mutableCollectionClass.parameterizedBy(fixedType)
+            val mutableCollectionType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(fixedType)
             val dependencyFiles = collectionBuilderInfo.dependencyFiles.toTypedArray()
 
             val packageName = builderClassName.packageName
@@ -170,7 +169,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         beginning.parameterizedBy(typeParameters)
                     }
 
-                    val listType = mutableCollectionClass.parameterizedBy(if (valueType is ParameterizedTypeName) {
+                    val listType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(if (valueType is ParameterizedTypeName) {
                         valueType.rawType.parameterizedBy(STAR_PROJECTION)
                     } else {
                         valueType
@@ -214,7 +213,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     FunSpec.builder(functionName).addParameter(
                         ParameterSpec.builder(
                             "init",
-                            LambdaTypeName.get(returnType, emptyList(), unitClass)
+                            LambdaTypeName.get(returnType, emptyList(), UNIT_CLASS)
                         ).build()
                     ).addCode("parentCollection.add(%T().apply(init).build())", returnType)
                         .build()
@@ -269,7 +268,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
         this.resolver = resolver
-        val symbols = resolver.getSymbolsWithAnnotation(generateBuilderAnnotation)
+        val symbols = resolver.getSymbolsWithAnnotation(GENERATE_BUILDER_ANNOTATION)
         val ret = symbols.filter { !it.validate() }
         symbols
             .filter { it is KSClassDeclaration && it.validate() }
@@ -408,7 +407,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         }
 
         val builderLambda =
-            LambdaTypeName.get(returnType, emptyList(), unitClass)
+            LambdaTypeName.get(returnType, emptyList(), UNIT_CLASS)
 
         return FunSpec.builder(propertyName).addParameter("init", builderLambda)
             .addCode(
@@ -487,7 +486,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         return FunSpec.builder("getImmediateDynamicValues")
             .addParameter("instance", if (isGeneric) baseClassType.parameterizedBy(STAR) else baseClassType)
-            .returns(setClass.parameterizedBy(dynamicValueClass.parameterizedBy(STAR))).addCode(codeBody)
+            .returns(SET_CLASS.parameterizedBy(dynamicValueClass.parameterizedBy(STAR))).addCode(codeBody)
             .build()
     }
 
@@ -603,7 +602,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 val propertyTypeName = propertyType.asTypeName()
 
                 val nullValueAnnotation = parameter.annotations.find { annotation ->
-                    annotation.annotationType.resolve().declaration.qualifiedName?.asString() == nullValueAnnotation
+                    annotation.annotationType.resolve().declaration.qualifiedName?.asString() == NULL_VALUE_ANNOTATION
                 }
 
                 val nullValue = if (nullValueAnnotation != null) {
