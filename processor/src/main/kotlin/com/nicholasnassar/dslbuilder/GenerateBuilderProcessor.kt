@@ -146,7 +146,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         declaration == rawTypeClass
                     }!!
 
-                    val typeParameters = superClassConstructorCall.resolve().arguments.map { it.asTypeName() }
+                    val typeParameters = superClassConstructorCall.resolve().arguments.map { argument ->
+                        val typeName = argument.asTypeName()
+
+                        if (typeName is ClassName) {
+                            WildcardTypeName.producerOf(typeName)
+                        } else {
+                            typeName
+                        }
+                    }
 
                     val beginning = ClassName(
                         packageName,
@@ -159,10 +167,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         beginning.parameterizedBy(typeParameters)
                     }
 
+                    val listType = mutableCollectionClass.parameterizedBy(valueType)
+
                     classBuilder.addFunction(
                         FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
                             .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
-                            .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
+                            .addCode("(parentCollection as %T).add(%T().apply(init).build())", listType, builderClass).build()
                     )
                 }
             } else {
