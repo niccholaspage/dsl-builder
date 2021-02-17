@@ -135,10 +135,32 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 subTypes[valueType.rawType]?.forEach {
                     val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
 
-                    val parameterizedBuilderClass = ClassName(packageName, className).parameterizedBy(valueType.typeArguments)
+                    val normalClass = ClassName(it.packageName, it.simpleName)
+
+                    val ktClass =
+                        resolver.getClassDeclarationByName(resolver.getKSNameFromString(normalClass.canonicalName))!!
+
+                    val superClassConstructorCall = ktClass.superTypes.find { typeReference ->
+                        val declaration = typeReference.resolve().declaration
+
+                        declaration == rawTypeClass
+                    }!!
+
+                    val typeParameters = superClassConstructorCall.resolve().arguments.map { it.asTypeName() }
+
+                    val beginning = ClassName(
+                        packageName,
+                        className
+                    )
+
+                    val receiverType = if (typeParameters.isEmpty()) {
+                        beginning
+                    } else {
+                        beginning.parameterizedBy(typeParameters)
+                    }
 
                     classBuilder.addFunction(
-                        FunSpec.builder(it.simpleName.decapitalize()).receiver(parameterizedBuilderClass)
+                        FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
                             .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
                             .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
                     )
