@@ -130,7 +130,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .addParameter("value", fixedType).addCode("parentCollection.add(value)").build()
             )
 
-            subTypes[valueType]?.forEach {
+            val rawValueType = if (valueType is ParameterizedTypeName) {
+                valueType.rawType
+            } else {
+                valueType
+            }
+
+            subTypes[rawValueType]?.forEach {
                 val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
 
                 classBuilder.addFunction(
@@ -138,12 +144,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
                         .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
                 )
-            }
-
-            val rawValueType = if (valueType is ParameterizedTypeName) {
-                valueType.rawType
-            } else {
-                valueType
             }
 
             val builderClassInfo = builderClassesToWrite[rawValueType]
@@ -507,17 +507,21 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val superTypes = parent.superTypes
 
             if (superTypes.isNotEmpty()) {
+                val superTypeNames = superTypes.map { it.asTypeName() }
+
                 val subClass = ClassName(packageName, baseClassName)
 
-                superTypes.forEach {
-                    val declaration = it.resolve().declaration
-
-                    if (declaration is KSClassDeclaration) {
-                        val superClass =
-                            ClassName(declaration.packageName.asString(), declaration.simpleName.asString())
-
-                        subTypes.getOrPut(superClass) { mutableListOf() }.add(subClass)
+                superTypeNames.forEach {
+                    val rawClass = when (it) {
+                        is ParameterizedTypeName -> it.rawType
+                        is ClassName -> it
+                        else -> return@forEach
                     }
+
+                    val superClass =
+                        ClassName(rawClass.packageName, rawClass.simpleName)
+
+                    subTypes.getOrPut(superClass) { mutableListOf() }.add(subClass)
                 }
             }
 
