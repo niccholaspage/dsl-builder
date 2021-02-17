@@ -426,7 +426,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    class WrappedParameter(val parameter: KSValueParameter, val isNotNullable: Boolean)
+    class WrappedParameter(val parameter: KSValueParameter, val isNotNullable: Boolean, val nullValue: String?)
 
     private fun generateBuildFunction(
         baseClassType: ClassName,
@@ -437,7 +437,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         parametersInConstructor.filter { it.isNotNullable }.forEach {
             val parameterName = it.parameter.name!!.asString()
-            codeBlock.add("require($parameterName != null) { %S }\n", "$parameterName cannot be null!")
+
+            if (it.nullValue == null) {
+                codeBlock.add("require($parameterName != null) { %S }\n", "$parameterName cannot be null!")
+            } else {
+                codeBlock.add("if ($parameterName == null) { $parameterName = ${it.nullValue} }\n")
+            }
         }
 
         codeBlock.add(
@@ -497,18 +502,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
             }
 
             val wrappedParameters = function.parameters.map {
-                val nullValue = it.annotations.find { annotation ->
+                val nullValueAnnotation = it.annotations.find { annotation ->
                     annotation.annotationType.resolve().declaration.qualifiedName?.asString() == nullValueAnnotation
                 }
 
-                if (nullValue != null) {
-                    throw IllegalArgumentException("Null value found!")
+                val nullValue = if (nullValueAnnotation != null) {
+                    nullValueAnnotation.arguments.find { argument -> argument.name!!.asString() == "nullValue" }!!.value as String
+                } else {
+                    null
                 }
 
                 val resolvedType = it.type.resolve()
                 val isNotNullable = resolvedType.nullability == Nullability.NOT_NULL
 
-                WrappedParameter(it, isNotNullable)
+                WrappedParameter(it, isNotNullable, nullValue)
             }
 
             classBuilder.addFunction(generateBuildFunction(baseClassType, wrappedParameters, typeVariableNames))
