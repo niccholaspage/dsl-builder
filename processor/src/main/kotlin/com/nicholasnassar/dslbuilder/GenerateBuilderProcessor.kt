@@ -351,16 +351,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
     fun generateProperty(
         containingFile: KSFile,
         classBuilder: TypeSpec.Builder,
-        parameter: KSValueParameter
-    ): Boolean {
-        val propertyName = parameter.name!!.asString()
-        val propertyType = parameter.type
+        wrappedParameter: WrappedParameter
+    ) {
+        val propertyName = wrappedParameter.parameter.name!!.asString()
+        val propertyType = wrappedParameter.parameter.type
         val propertyTypeName = propertyType.asTypeName()
-        var isDynamic = false
 
         if (propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName) {
-            isDynamic = true
-
             val staticPropertyName = propertyName.substring(0, propertyName.length - DYNAMIC_VALUE_SUFFIX.length)
 
             val staticValueType = propertyTypeName.typeArguments[0]
@@ -405,8 +402,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
         } else {
             classBuilder.addProperty(generateBasicProperty(propertyName, propertyTypeName))
         }
-
-        return isDynamic
     }
 
     private fun generateImmediateDynamicValuesGetter(
@@ -426,7 +421,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    class WrappedParameter(val parameter: KSValueParameter, val isNotNullable: Boolean, val nullValue: String?)
+    class WrappedParameter(
+        val parameter: KSValueParameter,
+        val isNotNullable: Boolean,
+        val nullValue: String?,
+        val isDynamic: Boolean
+    )
 
     private fun generateBuildFunction(
         baseClassType: ClassName,
@@ -441,7 +441,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
             if (it.nullValue == null) {
                 codeBlock.add("require($parameterName != null) { %S }\n", "$parameterName cannot be null!")
             } else {
-                codeBlock.add("if ($parameterName == null) { $parameterName = ${it.nullValue} }\n")
+                if (it.isDynamic) {
+                    codeBlock.add(
+                        "if ($parameterName == null) { $parameterName = %T(${it.nullValue}) }\n",
+                        staticDynamicValueClass
+                    )
+                } else {
+                    codeBlock.add("if ($parameterName == null) { $parameterName = ${it.nullValue} }\n")
+                }
             }
         }
 
@@ -495,14 +502,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // Theoretically, we override the class declaration visit method and only accept
             // on a class's primary constructor, so the parameters below should only refer to
             // the properties in the primary constructor.
-            function.parameters.forEach { parameter ->
-                if (generateProperty(containingFile, classBuilder, parameter)) {
-                    dynamicValues.add(parameter.name!!.asString())
-                }
-            }
+            val wrappedParameters = function.parameters.map { parameter ->
+                val propertyName = parameter.name!!.asString()
+                val propertyType = parameter.type
+                val propertyTypeName = propertyType.asTypeName()
 
-            val wrappedParameters = function.parameters.map {
-                val nullValueAnnotation = it.annotations.find { annotation ->
+                val nullValueAnnotation = parameter.annotations.find { annotation ->
                     annotation.annotationType.resolve().declaration.qualifiedName?.asString() == nullValueAnnotation
                 }
 
@@ -512,10 +517,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     null
                 }
 
-                val resolvedType = it.type.resolve()
-                val isNotNullable = resolvedType.nullability == Nullability.NOT_NULL
+                val isNotNullable = propertyType.resolve().nullability == Nullability.NOT_NULL
 
-                WrappedParameter(it, isNotNullable, nullValue)
+                val isDynamic =
+                    propertyName.endsWith(DYNAMIC_VALUE_SUFFIX) && propertyTypeName is ParameterizedTypeName && propertyTypeName.rawType.canonicalName == dynamicValueClass.canonicalName
+
+                if (isDynamic) {
+                    dynamicValues.add(parameter.name!!.asString())
+                }
+
+                val wrappedParameter = WrappedParameter(parameter, isNotNullable, nullValue, isDynamic)
+
+                generateProperty(containingFile, classBuilder, wrappedParameter)
+
+                wrappedParameter
             }
 
             classBuilder.addFunction(generateBuildFunction(baseClassType, wrappedParameters, typeVariableNames))
