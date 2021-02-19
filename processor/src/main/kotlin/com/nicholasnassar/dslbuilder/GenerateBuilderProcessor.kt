@@ -169,20 +169,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         beginning.parameterizedBy(typeParameters)
                     }
 
-                    val builderType = if (ktClass.typeParameters.isEmpty()) {
-                        builderClass
-                    } else {
-                        val filteredParameters = typeParameters.filterIsInstance<WildcardTypeName>().flatMap {
-                            it.outTypes
-                        }
-
-                        if (filteredParameters.isNotEmpty()) {
-                            builderClass.parameterizedBy(filteredParameters)
-                        } else {
-                            builderClass
-                        }
-                    }
-
                     val listType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(if (valueType is ParameterizedTypeName) {
                         valueType.rawType.parameterizedBy(STAR_PROJECTION)
                     } else {
@@ -191,8 +177,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     classBuilder.addFunction(
                         FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
-                            .addParameter(ParameterSpec("init", LambdaTypeName.get(builderType, emptyList(), UNIT)))
-                            .addCode("(parentCollection as %T).add(%T().apply(init).build())", listType, builderType).build()
+                            .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
+                            .addCode("(parentCollection as %T).add(%T().apply(init).build())", listType, builderClass).build()
                     )
                 }
             } else {
