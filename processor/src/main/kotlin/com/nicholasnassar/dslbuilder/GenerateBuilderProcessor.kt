@@ -173,7 +173,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         builderClass
                     } else {
                         val filteredParameters = typeParameters.filterIsInstance<WildcardTypeName>().flatMap {
-                            it.outTypes
+                            it.outTypes.filterIsInstance<ClassName>().map {
+                                TypeVariableName(it.simpleName)
+                            }
                         }
 
                         if (filteredParameters.isNotEmpty()) {
