@@ -152,6 +152,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         val typeName = argument.asTypeName()
 
                         if (typeName is ClassName) {
+                            if (typeName.toString() != "com.example.target.Target") {
+                                throw IllegalArgumentException(typeName.toString())
+                            }
                             WildcardTypeName.producerOf(typeName)
                         } else {
                             typeName
@@ -169,16 +172,19 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         beginning.parameterizedBy(typeParameters)
                     }
 
-                    val listType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(if (valueType is ParameterizedTypeName) {
-                        valueType.rawType.parameterizedBy(STAR_PROJECTION)
-                    } else {
-                        valueType
-                    })
+                    val listType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(
+                        if (valueType is ParameterizedTypeName) {
+                            valueType.rawType.parameterizedBy(STAR_PROJECTION)
+                        } else {
+                            valueType
+                        }
+                    )
 
                     classBuilder.addFunction(
                         FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
                             .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
-                            .addCode("(parentCollection as %T).add(%T().apply(init).build())", listType, builderClass).build()
+                            .addCode("(parentCollection as %T).add(%T().apply(init).build())", listType, builderClass)
+                            .build()
                     )
                 }
             } else {
@@ -298,15 +304,26 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     private fun KSTypeReference.asTypeName(): TypeName {
         val type = resolve()
-        val packageName = type.declaration.packageName.asString()
-        val simpleName = type.declaration.simpleName.asString()
 
-        val typeParameters = type.arguments.map { it.asTypeName() }
+        when (val declaration = type.declaration) {
+            is KSClassDeclaration -> {
+                val packageName = declaration.packageName.asString()
+                val simpleName = declaration.simpleName.asString()
 
-        return if (typeParameters.isNotEmpty()) {
-            ClassName(packageName, simpleName).parameterizedBy(typeParameters)
-        } else {
-            ClassName(packageName, simpleName)
+                val typeParameters = type.arguments.map { it.asTypeName() }
+
+                return if (typeParameters.isNotEmpty()) {
+                    ClassName(packageName, simpleName).parameterizedBy(typeParameters)
+                } else {
+                    ClassName(packageName, simpleName)
+                }
+            }
+            is KSTypeParameter -> {
+                return declaration.asTypeVariableName()
+            }
+            else -> {
+                throw IllegalArgumentException("Unsupported type")
+            }
         }
     }
 
