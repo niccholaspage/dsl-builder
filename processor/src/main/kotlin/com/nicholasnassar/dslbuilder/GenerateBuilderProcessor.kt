@@ -141,9 +141,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         val typeName = argument.asTypeName()
 
                         if (typeName is ClassName) {
-                            if (typeName.toString() != "com.example.target.Target") {
-                                throw IllegalArgumentException(typeName.toString())
-                            }
                             WildcardTypeName.producerOf(typeName)
                         } else {
                             typeName
