@@ -80,10 +80,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
         for ((builderClassName, collectionBuilderInfo) in collectionBuildersToGenerate) {
             val rawTypeClass =
                 resolver.getClassDeclarationByName(resolver.getKSNameFromString(collectionBuilderInfo.rawTypeArgumentClass.canonicalName))!!
-
-            val valueType = collectionBuilderInfo.collectionType
-
-            val mutableCollectionType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(valueType)
             val dependencyFiles = collectionBuilderInfo.dependencyFiles.toTypedArray()
 
             val packageName = builderClassName.packageName
@@ -95,11 +91,22 @@ class GenerateBuilderProcessor : SymbolProcessor {
             )
 
             val classBuilder = TypeSpec.classBuilder(className)
+
             val parameters = rawTypeClass.typeParameters.map {
                 val typeVariableName = it.asTypeVariableName()
 
                 TypeVariableName(typeVariableName.name, typeVariableName.bounds, null)
             }
+
+            val collectionType = collectionBuilderInfo.collectionType
+
+            val valueType = when {
+                parameters.isEmpty() -> collectionType
+                collectionType is ParameterizedTypeName -> collectionType.rawType.parameterizedBy(parameters)
+                else -> throw IllegalArgumentException("weird exception at collection stuff.")
+            }
+
+            val mutableCollectionType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(valueType)
 
             classBuilder.addTypeVariables(parameters)
 
