@@ -137,7 +137,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         declaration == rawTypeClass
                     }!!
 
-                    val typeParameters = superClassConstructorCall.resolve().arguments.map { argument ->
+                    val typeParameters = ktClass.typeParameters.map { it.asTypeVariableName() }
+
+                    val superClassTypeParameters = superClassConstructorCall.resolve().arguments.map { argument ->
                         val typeName = argument.asTypeName()
 
                         if (typeName is ClassName) {
@@ -152,10 +154,16 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         className
                     )
 
-                    val receiverType = if (typeParameters.isEmpty()) {
+                    val receiverType = if (superClassTypeParameters.isEmpty()) {
                         beginning
                     } else {
-                        beginning.parameterizedBy(typeParameters)
+                        beginning.parameterizedBy(superClassTypeParameters)
+                    }
+
+                    val parameterizedBuilderClass = if (typeParameters.isEmpty()) {
+                        builderClass
+                    } else {
+                        builderClass.parameterizedBy(typeParameters)
                     }
 
                     val listType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(
@@ -168,8 +176,17 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     classBuilder.addFunction(
                         FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
-                            .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
-                            .addCode("(parentCollection as %T).add(%T().apply(init).build())", listType, builderClass)
+                            .addParameter(
+                                ParameterSpec(
+                                    "init",
+                                    LambdaTypeName.get(parameterizedBuilderClass, emptyList(), UNIT)
+                                )
+                            )
+                            .addCode(
+                                "(parentCollection as %T).add(%T().apply(init).build())",
+                                listType,
+                                parameterizedBuilderClass
+                            )
                             .build()
                     )
                 }
