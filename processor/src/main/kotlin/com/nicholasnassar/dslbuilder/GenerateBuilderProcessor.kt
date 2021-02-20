@@ -213,7 +213,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             if (builderClassInfo != null) {
                 val returnType = if (valueType is ParameterizedTypeName) {
-                    builderClassInfo.builderClassName.parameterizedBy(valueType)
+                    builderClassInfo.builderClassName.parameterizedBy(valueType.typeArguments)
                 } else {
                     builderClassInfo.builderClassName
                 }
