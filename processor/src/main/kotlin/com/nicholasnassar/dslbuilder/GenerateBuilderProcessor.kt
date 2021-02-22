@@ -146,25 +146,19 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     val typeParameters = ktClass.typeParameters.map { it.asTypeVariableName() }
 
-                    val superClassTypeParameters = superClassConstructorCall.resolve().arguments.map { argument ->
-                        val typeName = argument.asTypeName()
-
-                        if (typeName is ClassName) {
-                            WildcardTypeName.producerOf(typeName)
-                        } else {
-                            typeName
-                        }
-                    }
-
                     val beginning = ClassName(
                         packageName,
                         className
                     )
 
-                    val receiverType = if (superClassTypeParameters.isEmpty()) {
+                    val superclassTypeParameters = superClassConstructorCall.resolve().declaration.typeParameters.map {
+                        WildcardTypeName.producerOf(it.asTypeVariableName())
+                    }
+
+                    val receiverType = if (superclassTypeParameters.isEmpty()) {
                         beginning
                     } else {
-                        beginning.parameterizedBy(superClassTypeParameters)
+                        beginning.parameterizedBy(superclassTypeParameters)
                     }
 
                     val parameterizedBuilderClass = if (typeParameters.isEmpty()) {
