@@ -20,7 +20,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         private val NULL_VALUE_ANNOTATION = NullValue::class.java.canonicalName
 
         private val BUILDER_INTERFACE_NAME = Builder::class.java.run {
-            ClassName(packageName, simpleName)
+            ClassName(`package`.name, simpleName)
         }
 
         private val MUTABLE_COLLECTION_CLASSES = ClassName("kotlin.collections", "MutableCollection")
