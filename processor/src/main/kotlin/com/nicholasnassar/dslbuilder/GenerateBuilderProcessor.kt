@@ -3,10 +3,12 @@ package com.nicholasnassar.dslbuilder
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
+import com.nicholasnassar.dslbuilder.annotation.BuilderModifier
 import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -50,6 +52,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     class ClassInfo(
+        val modifiers: List<BuilderModifier>,
         val dependencies: Dependencies,
         val builderClassName: ClassName,
         val classBuilder: TypeSpec.Builder
@@ -146,13 +149,27 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     val typeParameters = ktClass.typeParameters.map { it.asTypeVariableName() }
 
-                    val superClassTypeParameters = superClassConstructorCall.resolve().arguments.map { argument ->
-                        val typeName = argument.asTypeName()
+                    val superClassDeclaration = superClassConstructorCall.resolve().declaration
 
-                        if (typeName is ClassName) {
-                            WildcardTypeName.producerOf(typeName)
-                        } else {
-                            typeName
+                    val superClassName = ClassName(superClassDeclaration.packageName.asString(), superClassDeclaration.simpleName.asString())
+
+                    File("C:\\Users\\nicch\\.ssh\\test.txt").writeText(superClassName.canonicalName)
+
+                    val superClassInfo = builderClassesToWrite[superClassName]
+
+                    val superClassTypeParameters = if (superClassInfo != null && superClassInfo.modifiers.contains(BuilderModifier.OPEN_COLLECTION_GENERIC)) {
+                        superClassConstructorCall.resolve().declaration.typeParameters.map {
+                            WildcardTypeName.producerOf(it.asTypeVariableName())
+                        }
+                    } else {
+                        superClassConstructorCall.resolve().arguments.map { argument ->
+                            val typeName = argument.asTypeName()
+
+                            if (typeName is ClassName) {
+                                WildcardTypeName.producerOf(typeName)
+                            } else {
+                                typeName
+                            }
                         }
                     }
 
@@ -667,7 +684,17 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     ).build()
             )
 
+            val annotation =
+                parent.annotations.find { it.annotationType.resolve().declaration.qualifiedName!!.asString() == GENERATE_BUILDER_ANNOTATION }!!
+
+            val modifiersArgument = annotation.arguments.find { it.name!!.asString() == "modifiers" }!!
+
+            val modifiers = (modifiersArgument.value as List<KSType>).map {
+                BuilderModifier.valueOf(it.declaration.simpleName.asString())
+            }
+
             builderClassesToWrite[baseClassType] = ClassInfo(
+                modifiers,
                 Dependencies(true, containingFile),
 //                Dependencies.ALL_FILES,
                 builderClassName,
