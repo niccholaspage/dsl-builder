@@ -3,9 +3,10 @@ package com.nicholasnassar.dslbuilder
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
-import com.nicholasnassar.dslbuilder.annotation.BuilderModifier
-import com.nicholasnassar.dslbuilder.annotation.GenerateBuilder
-import com.nicholasnassar.dslbuilder.annotation.NullValue
+import com.nicholasnassar.dslbuilder.api.Builder
+import com.nicholasnassar.dslbuilder.api.annotation.BuilderModifier
+import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
+import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import java.io.File

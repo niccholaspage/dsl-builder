@@ -1,4 +1,4 @@
-package com.nicholasnassar.dslbuilder
+package com.nicholasnassar.dslbuilder.api
 
 interface Builder {
     fun build(): Any

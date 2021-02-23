@@ -1,4 +1,4 @@
-package com.nicholasnassar.dslbuilder.annotation
+package com.nicholasnassar.dslbuilder.api.annotation
 
 enum class BuilderModifier {
     // Opens up the generic types

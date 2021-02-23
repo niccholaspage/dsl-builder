@@ -1,4 +1,4 @@
-package com.nicholasnassar.dslbuilder.annotation
+package com.nicholasnassar.dslbuilder.api.annotation
 
 @Target(AnnotationTarget.VALUE_PARAMETER)
 @Retention(AnnotationRetention.SOURCE)

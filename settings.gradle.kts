@@ -13,4 +13,5 @@ pluginManagement {
 
 rootProject.name = "dsl-builder"
 
+include(":api")
 include(":processor")
