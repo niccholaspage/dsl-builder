@@ -19,6 +19,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
         private val GENERATE_BUILDER_ANNOTATION = GenerateBuilder::class.java.canonicalName
         private val NULL_VALUE_ANNOTATION = NullValue::class.java.canonicalName
 
+        private val BUILDER_INTERFACE_NAME = Builder::class.java.run {
+            ClassName(packageName, simpleName)
+        }
+
         private val MUTABLE_COLLECTION_CLASSES = ClassName("kotlin.collections", "MutableCollection")
         private val SET_CLASS = ClassName("kotlin.collections", "Set")
         private val UNIT_CLASS = ClassName("kotlin", "Unit")
@@ -151,27 +155,31 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     val superClassDeclaration = superClassConstructorCall.resolve().declaration
 
-                    val superClassName = ClassName(superClassDeclaration.packageName.asString(), superClassDeclaration.simpleName.asString())
+                    val superClassName = ClassName(
+                        superClassDeclaration.packageName.asString(),
+                        superClassDeclaration.simpleName.asString()
+                    )
 
                     File("C:\\Users\\nicch\\.ssh\\test.txt").writeText(superClassName.canonicalName)
 
                     val superClassInfo = builderClassesToWrite[superClassName]
 
-                    val superClassTypeParameters = if (superClassInfo != null && superClassInfo.modifiers.contains(BuilderModifier.OPEN_COLLECTION_GENERIC)) {
-                        superClassConstructorCall.resolve().declaration.typeParameters.map {
-                            WildcardTypeName.producerOf(it.asTypeVariableName())
-                        }
-                    } else {
-                        superClassConstructorCall.resolve().arguments.map { argument ->
-                            val typeName = argument.asTypeName()
+                    val superClassTypeParameters =
+                        if (superClassInfo != null && superClassInfo.modifiers.contains(BuilderModifier.OPEN_COLLECTION_GENERIC)) {
+                            superClassConstructorCall.resolve().declaration.typeParameters.map {
+                                WildcardTypeName.producerOf(it.asTypeVariableName())
+                            }
+                        } else {
+                            superClassConstructorCall.resolve().arguments.map { argument ->
+                                val typeName = argument.asTypeName()
 
-                            if (typeName is ClassName) {
-                                WildcardTypeName.producerOf(typeName)
-                            } else {
-                                typeName
+                                if (typeName is ClassName) {
+                                    WildcardTypeName.producerOf(typeName)
+                                } else {
+                                    typeName
+                                }
                             }
                         }
-                    }
 
                     val beginning = ClassName(
                         packageName,
@@ -586,7 +594,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
             baseClassType.parameterizedBy(typeVariableNames)
         }
 
-        return FunSpec.builder("build").returns(returnType).addCode(codeBlock.build()).build()
+        return FunSpec.builder("build").addModifiers(KModifier.OVERRIDE).returns(returnType).addCode(codeBlock.build())
+            .build()
     }
 
     fun getBuilderName(simpleName: String): String {
@@ -670,6 +679,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 wrappedParameter
             }
+
+            // Let's add our implementation of the Builder interface so consumers
+            // of the dsl-builder API can store different types of builders, including
+            // the ability to use generics!
+            classBuilder.addSuperinterface(BUILDER_INTERFACE_NAME)
 
             classBuilder.addFunction(generateBuildFunction(baseClassType, wrappedParameters, typeVariableNames))
 
