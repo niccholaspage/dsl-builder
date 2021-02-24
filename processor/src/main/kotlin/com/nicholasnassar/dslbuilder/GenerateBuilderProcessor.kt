@@ -86,9 +86,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val type = parameter.type.asTypeName()
 
+                val rawType = if (type is ParameterizedTypeName) {
+                    type.rawType
+                } else {
+                    type
+                }
+
                 val parameterName = parameter.name!!.asString()
 
-                subTypes[type]?.forEach { subType ->
+                subTypes[rawType]?.forEach { subType ->
                     val functionName = subType.simpleName.decapitalize()
                     val fixedParameterName = parameterName.capitalize()
 
