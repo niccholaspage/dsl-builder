@@ -1,5 +1,6 @@
 package com.nicholasnassar.dslbuilder
 
+import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
@@ -104,11 +105,35 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
+                    val receiverType = if (type is ParameterizedTypeName) {
+                        val superClassConstructorCall =
+                            resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
+                                val declaration = typeReference.resolve().declaration
+
+                                declaration == rawType
+                            }
+
+                        superClassConstructorCall?.resolve()?.arguments?.map {
+                            val typeName = it.asTypeName()
+
+                            if (typeName is ClassName) {
+                                WildcardTypeName.consumerOf(typeName)
+                            } else {
+                                typeName
+                            }
+                        }
+                    } else {
+                        null
+                    }
+
+                    val builderClass = ClassName(subType.packageName, getBuilderName(subType.simpleName))
+
                     classBuilder.addFunction(
                         generateBuilderForProperty(
                             newFunctionName,
                             parameterName,
-                            ClassName(subType.packageName, getBuilderName(subType.simpleName))
+                            builderClass,
+                            if (receiverType == null) null else builderClass.parameterizedBy(receiverType)
                         )
                     )
                 }
@@ -116,7 +141,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 val builderClassInfo = builderClassesToWrite[type]
 
                 if (builderClassInfo != null) {
-                    classBuilder.addFunction(generateBuilderForProperty(parameterName, parameterName, builderClassInfo.builderClassName))
+                    classBuilder.addFunction(
+                        generateBuilderForProperty(
+                            parameterName,
+                            parameterName,
+                            builderClassInfo.builderClassName,
+                            null
+                        )
+                    )
                 }
             }
 
@@ -411,9 +443,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private fun generateBuilderForProperty(
         functionName: String,
         parameterName: String,
-        builderTypeName: TypeName
+        builderTypeName: TypeName,
+        receiverTypeName: TypeName?
     ): FunSpec {
-        return FunSpec.builder(functionName)
+        val builder = FunSpec.builder(functionName)
             .addParameter(
                 ParameterSpec.builder(
                     "init",
@@ -421,7 +454,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 ).build()
             )
             .addCode("$parameterName = %T().apply(init).build()", builderTypeName)
-            .build()
+
+        if (receiverTypeName != null) {
+            builder.receiver(receiverTypeName)
+        }
+
+        return builder.build()
     }
 
     private fun generateStaticPropertySettingDynamic(
