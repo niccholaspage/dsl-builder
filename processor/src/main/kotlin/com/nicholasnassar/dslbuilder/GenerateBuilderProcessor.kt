@@ -453,7 +453,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         if (receiverClass != null && typeParameters != null) {
             val receiverTypeParameters = typeParameters.map { typeName ->
                 if (typeName is ClassName) {
-                    WildcardTypeName.producerOf(typeName)
+                    WildcardTypeName.consumerOf(typeName)
                 } else {
                     typeName
                 }
