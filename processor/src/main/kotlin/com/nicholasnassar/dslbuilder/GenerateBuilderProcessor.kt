@@ -60,7 +60,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val modifiers: List<BuilderModifier>,
         val dependencies: Dependencies,
         val builderClassName: ClassName,
-        val classBuilder: TypeSpec.Builder
+        val classBuilder: TypeSpec.Builder,
+        val wrappedParameters: List<WrappedParameter>
     )
 
     private val builderClassesToWrite = mutableMapOf<ClassName, ClassInfo>()
@@ -75,7 +76,24 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val fileBuilder = FileSpec.builder(builderClass.packageName, builderClass.simpleName)
 
-            fileBuilder.addType(classInfo.classBuilder.build())
+            val classBuilder = classInfo.classBuilder
+
+            // One of the parameters has a builder,
+            // so lets be nice and create a function
+            // utilizing the builder.
+            classInfo.wrappedParameters.forEach {
+                val parameter = it.parameter
+
+                val type = parameter.type.asTypeName()
+
+                val builderClassInfo = builderClassesToWrite[type]
+
+                if (builderClassInfo != null) {
+                    classBuilder.addFunction(generateBuilderForProperty(parameter, builderClassInfo))
+                }
+            }
+
+            fileBuilder.addType(classBuilder.build())
 
             file.writer().use { outputSteam ->
                 fileBuilder.build().writeTo(outputSteam)
@@ -361,6 +379,27 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 throw IllegalArgumentException("Unsupported type")
             }
         }
+    }
+
+    private fun generateBuilderForProperty(
+        parameter: KSValueParameter,
+        builderClassInfo: ClassInfo
+    ): FunSpec {
+        val type = parameter.type.asTypeName()
+
+        val parameterName = parameter.name!!.asString()
+
+        val builderClassName = builderClassInfo.builderClassName
+
+        return FunSpec.builder(parameterName)
+            .addParameter(
+                ParameterSpec.builder(
+                    "init",
+                    LambdaTypeName.get(builderClassName, emptyList(), UNIT_CLASS)
+                ).build()
+            )
+            .addCode("$parameterName = %T().apply(init).build()", builderClassName)
+            .build()
     }
 
     private fun generateStaticPropertySettingDynamic(
@@ -713,7 +752,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 Dependencies(true, containingFile),
 //                Dependencies.ALL_FILES,
                 builderClassName,
-                classBuilder
+                classBuilder,
+                wrappedParameters
             )
         }
     }
