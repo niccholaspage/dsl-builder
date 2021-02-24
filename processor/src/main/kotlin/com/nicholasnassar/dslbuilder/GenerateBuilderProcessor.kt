@@ -86,18 +86,22 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val type = parameter.type.asTypeName()
 
-                val subTypesForClass = subTypes[type]
-
                 val parameterName = parameter.name!!.asString()
 
-                if (subTypesForClass != null) {
-
+                subTypes[type]?.forEach { subType ->
+                    classBuilder.addFunction(
+                        generateBuilderForProperty(
+                            subType.simpleName.decapitalize() + parameterName.capitalize(),
+                            parameterName,
+                            ClassName(subType.packageName, getBuilderName(subType.simpleName))
+                        )
+                    )
                 }
 
                 val builderClassInfo = builderClassesToWrite[type]
 
                 if (builderClassInfo != null) {
-                    classBuilder.addFunction(generateBuilderForProperty(parameterName, builderClassInfo))
+                    classBuilder.addFunction(generateBuilderForProperty(parameterName, parameterName, builderClassInfo.builderClassName))
                 }
             }
 
@@ -390,19 +394,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     private fun generateBuilderForProperty(
+        functionName: String,
         parameterName: String,
-        builderClassInfo: ClassInfo
+        builderTypeName: TypeName
     ): FunSpec {
-        val builderClassName = builderClassInfo.builderClassName
-
-        return FunSpec.builder(parameterName)
+        return FunSpec.builder(functionName)
             .addParameter(
                 ParameterSpec.builder(
                     "init",
-                    LambdaTypeName.get(builderClassName, emptyList(), UNIT_CLASS)
+                    LambdaTypeName.get(builderTypeName, emptyList(), UNIT_CLASS)
                 ).build()
             )
-            .addCode("$parameterName = %T().apply(init).build()", builderClassName)
+            .addCode("$parameterName = %T().apply(init).build()", builderTypeName)
             .build()
     }
 
