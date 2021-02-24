@@ -89,9 +89,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 val parameterName = parameter.name!!.asString()
 
                 subTypes[type]?.forEach { subType ->
+                    val functionName = subType.simpleName.decapitalize()
+                    val fixedParameterName = parameterName.capitalize()
+
+                    val newFunctionName = if (functionName.endsWith(fixedParameterName)) {
+                        functionName
+                    } else {
+                        functionName + fixedParameterName
+                    }
+
                     classBuilder.addFunction(
                         generateBuilderForProperty(
-                            subType.simpleName.decapitalize() + parameterName.capitalize(),
+                            newFunctionName,
                             parameterName,
                             ClassName(subType.packageName, getBuilderName(subType.simpleName))
                         )
