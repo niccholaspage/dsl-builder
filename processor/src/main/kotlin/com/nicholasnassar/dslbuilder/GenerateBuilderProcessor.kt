@@ -59,6 +59,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     class ClassInfo(
         val modifiers: List<BuilderModifier>,
+        val hasTypeParameters: Boolean,
         val dependencies: Dependencies,
         val builderClassName: ClassName,
         val classBuilder: TypeSpec.Builder,
@@ -105,7 +106,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
-                    val receiverType = if (type is ParameterizedTypeName) {
+                    val receiverType = if (classInfo.hasTypeParameters && type is ParameterizedTypeName) {
                         val rawTypeClassName = (rawType as ClassName).canonicalName
 
                         val superClassConstructorCall =
@@ -809,6 +810,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             builderClassesToWrite[baseClassType] = ClassInfo(
                 modifiers,
+                parent.typeParameters.isNotEmpty(),
                 Dependencies(true, containingFile),
 //                Dependencies.ALL_FILES,
                 builderClassName,
