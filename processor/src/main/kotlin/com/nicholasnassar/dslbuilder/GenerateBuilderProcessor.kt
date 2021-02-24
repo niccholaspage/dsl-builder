@@ -106,7 +106,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
-                    val receiverType = if (classInfo.hasTypeParameters && type is ParameterizedTypeName) {
+                    val typeArguments = if (classInfo.hasTypeParameters && type is ParameterizedTypeName) {
                         val rawTypeClassName = (rawType as ClassName).canonicalName
 
                         val superClassConstructorCall =
@@ -116,15 +116,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 declaration.qualifiedName!!.asString() == rawTypeClassName
                             }
 
-                        superClassConstructorCall?.resolve()?.arguments?.map {
-                            val typeName = it.asTypeName()
-
-                            if (typeName is ClassName) {
-                                WildcardTypeName.consumerOf(typeName)
-                            } else {
-                                typeName
-                            }
-                        }
+                        superClassConstructorCall?.resolve()?.arguments?.map { it.asTypeName() }
                     } else {
                         null
                     }
@@ -134,7 +126,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                             newFunctionName,
                             parameterName,
                             ClassName(subType.packageName, getBuilderName(subType.simpleName)),
-                            if (receiverType == null) null else classInfo.builderClassName.parameterizedBy(receiverType)
+                            classInfo.builderClassName,
+                            typeArguments
                         )
                     )
                 }
@@ -147,6 +140,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                             parameterName,
                             parameterName,
                             builderClassInfo.builderClassName,
+                            null,
                             null
                         )
                     )
@@ -445,7 +439,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
         functionName: String,
         parameterName: String,
         builderTypeName: TypeName,
-        receiverTypeName: TypeName?
+        receiverClass: ClassName?,
+        typeParameters: List<TypeName>?,
     ): FunSpec {
         val builder = FunSpec.builder(functionName)
             .addParameter(
@@ -454,11 +449,21 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     LambdaTypeName.get(builderTypeName, emptyList(), UNIT_CLASS)
                 ).build()
             )
-            .addCode("$parameterName = %T().apply(init).build()", builderTypeName)
 
-        if (receiverTypeName != null) {
-            builder.receiver(receiverTypeName)
+        if (receiverClass != null && typeParameters != null) {
+            val receiverTypeParameters = typeParameters.map { typeName ->
+                if (typeName is ClassName) {
+                    WildcardTypeName.producerOf(typeName)
+                } else {
+                    typeName
+                }
+            }
+
+            builder.receiver(receiverClass.parameterizedBy(receiverTypeParameters))
+            builder.addCode("(this as %T).", receiverClass.parameterizedBy(typeParameters))
         }
+
+        builder.addCode("$parameterName = %T().apply(init).build()", builderTypeName)
 
         return builder.build()
     }
