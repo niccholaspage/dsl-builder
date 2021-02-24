@@ -86,10 +86,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val type = parameter.type.asTypeName()
 
+                val subTypesForClass = subTypes[type]
+
+                val parameterName = parameter.name!!.asString()
+
+                if (subTypesForClass != null) {
+
+                }
+
                 val builderClassInfo = builderClassesToWrite[type]
 
                 if (builderClassInfo != null) {
-                    classBuilder.addFunction(generateBuilderForProperty(parameter, builderClassInfo))
+                    classBuilder.addFunction(generateBuilderForProperty(parameterName, builderClassInfo))
                 }
             }
 
@@ -382,13 +390,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     private fun generateBuilderForProperty(
-        parameter: KSValueParameter,
+        parameterName: String,
         builderClassInfo: ClassInfo
     ): FunSpec {
-        val type = parameter.type.asTypeName()
-
-        val parameterName = parameter.name!!.asString()
-
         val builderClassName = builderClassInfo.builderClassName
 
         return FunSpec.builder(parameterName)
