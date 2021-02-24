@@ -106,11 +106,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     }
 
                     val receiverType = if (type is ParameterizedTypeName) {
+                        val rawTypeClassName = (rawType as ClassName).canonicalName
+
                         val superClassConstructorCall =
                             resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
                                 val declaration = typeReference.resolve().declaration
 
-                                declaration == rawType
+                                declaration.qualifiedName!!.asString() == rawTypeClassName
                             }
 
                         superClassConstructorCall?.resolve()?.arguments?.map {
@@ -126,14 +128,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         null
                     }
 
-                    val builderClass = ClassName(subType.packageName, getBuilderName(subType.simpleName))
-
                     classBuilder.addFunction(
                         generateBuilderForProperty(
                             newFunctionName,
                             parameterName,
-                            builderClass,
-                            if (receiverType == null) null else builderClass.parameterizedBy(receiverType)
+                            ClassName(subType.packageName, getBuilderName(subType.simpleName)),
+                            if (receiverType == null) null else classInfo.builderClassName.parameterizedBy(receiverType)
                         )
                     )
                 }
