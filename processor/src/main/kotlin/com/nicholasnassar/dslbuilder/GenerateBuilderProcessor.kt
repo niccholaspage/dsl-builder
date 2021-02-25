@@ -79,6 +79,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = classInfo.classBuilder
 
+            val ktClass = resolver.getClassDeclarationByName(className.canonicalName)!!
+
             // One of the parameters has a builder,
             // so lets be nice and create a function
             // utilizing the builder.
@@ -115,7 +117,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 declaration.qualifiedName!!.asString() == rawTypeClassName
                             }
 
-                        superClassConstructorCall?.resolve()?.arguments?.map { it.asTypeName() }
+                        superClassConstructorCall?.resolve()?.arguments?.zip(ktClass.typeParameters) { argument, typeParameter ->
+                            val typeName = argument.asTypeName()
+
+                            when (typeParameter.variance) {
+                                Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
+                                Variance.COVARIANT -> WildcardTypeName.producerOf(typeName)
+                                else -> typeName
+                            }
+                        }
                     } else {
                         null
                     }
@@ -458,15 +468,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             )
 
         if (receiverClass != null && typeParameters != null) {
-            val receiverTypeParameters = typeParameters.map { typeName ->
-                if (typeName is ClassName) {
-                    WildcardTypeName.consumerOf(typeName)
-                } else {
-                    typeName
-                }
-            }
-
-            builder.receiver(receiverClass.parameterizedBy(receiverTypeParameters))
+            builder.receiver(receiverClass.parameterizedBy(typeParameters))
             builder.addCode("(this as %T).", receiverClass.parameterizedBy(typeParameters))
         }
 
