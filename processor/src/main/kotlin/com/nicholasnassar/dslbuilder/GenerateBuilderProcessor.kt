@@ -79,8 +79,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = classInfo.classBuilder
 
-            val ktClass = resolver.getClassDeclarationByName(className.canonicalName)!!
-
             // One of the parameters has a builder,
             // so lets be nice and create a function
             // utilizing the builder.
@@ -96,6 +94,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 }
 
                 val parameterName = parameter.name!!.asString()
+
+                val superType = resolver.getClassDeclarationByName((rawType as ClassName).canonicalName)!!
 
                 subTypes[rawType]?.forEach { subType ->
                     val functionName = subType.simpleName.decapitalize()
@@ -117,7 +117,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 declaration.qualifiedName!!.asString() == rawTypeClassName
                             }
 
-                        superClassConstructorCall?.resolve()?.arguments?.zip(ktClass.typeParameters) { argument, typeParameter ->
+                        superClassConstructorCall?.resolve()?.arguments?.zip(superType.typeParameters) { argument, typeParameter ->
                             val typeName = argument.asTypeName()
 
                             when (typeParameter.variance) {
