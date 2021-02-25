@@ -748,7 +748,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(builderClassName)
 
-            val typeVariableNames = parent.typeParameters.map { it.asTypeVariableName() }
+            val typeVariableNames = parent.typeParameters.map {
+                val typeVariableName = it.asTypeVariableName()
+
+                TypeVariableName(typeVariableName.name, typeVariableName.bounds, null)
+            }
 
             classBuilder.addTypeVariables(typeVariableNames)
 
