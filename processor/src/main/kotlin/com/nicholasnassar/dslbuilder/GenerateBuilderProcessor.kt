@@ -120,9 +120,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         superClassConstructorCall?.resolve()?.arguments?.zip(superType.typeParameters) { argument, typeParameter ->
                             val typeName = argument.asTypeName()
 
+//                            when (typeParameter.variance) {
+//                                Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
+//                                Variance.COVARIANT -> WildcardTypeName.producerOf(typeName)
+//                                else -> typeName
+//                            }
+
                             when (typeParameter.variance) {
-                                Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
-                                Variance.COVARIANT -> WildcardTypeName.producerOf(typeName)
+                                Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(typeName)
+                                Variance.COVARIANT -> WildcardTypeName.consumerOf(typeName)
                                 else -> typeName
                             }
                         }
