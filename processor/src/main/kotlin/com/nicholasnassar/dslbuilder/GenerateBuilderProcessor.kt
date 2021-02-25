@@ -632,7 +632,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private fun generateImmediateDynamicValuesGetter(
         baseClassType: ClassName,
         dynamicValues: Set<String>,
-        isGeneric: Boolean
+        numberOfTypeVariables: Int,
     ): FunSpec {
         val codeBody = if (dynamicValues.isEmpty()) {
             "return emptySet()"
@@ -640,8 +640,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
             "return setOf(${dynamicValues.joinToString { "instance.$it" }}).filterNotNull().toSet()"
         }
 
+        val parameterType = if (numberOfTypeVariables == 0) {
+            baseClassType
+        } else {
+            baseClassType.parameterizedBy(MutableList(numberOfTypeVariables) { STAR })
+        }
+
         return FunSpec.builder("getImmediateDynamicValues")
-            .addParameter("instance", if (isGeneric) baseClassType.parameterizedBy(STAR) else baseClassType)
+            .addParameter("instance", parameterType)
             .returns(SET_CLASS.parameterizedBy(dynamicValueClass.parameterizedBy(STAR))).addCode(codeBody)
             .build()
     }
@@ -797,7 +803,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         generateImmediateDynamicValuesGetter(
                             baseClassType,
                             dynamicValues,
-                            typeVariableNames.isNotEmpty()
+                            typeVariableNames.size
                         )
                     ).build()
             )
