@@ -240,15 +240,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 WildcardTypeName.producerOf(it.asTypeVariableName())
                             }
                         } else {
-                            superClassConstructorCall.resolve().arguments.map { argument ->
-                                val typeName = argument.asTypeName()
-
-                                if (typeName is ClassName) {
-                                    WildcardTypeName.producerOf(typeName)
-                                } else {
-                                    typeName
-                                }
-                            }
+                            superClassConstructorCall.resolve().arguments
                         }
 
                     val beginning = ClassName(
