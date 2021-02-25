@@ -140,7 +140,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         generateBuilderForProperty(
                             newFunctionName,
                             parameterName,
-                            ClassName(subType.packageName, getBuilderName(subType.simpleName)),
+                            getBuilderClassName(subType),
                             classInfo.builderClassName,
                             typeArguments
                         )
@@ -226,7 +226,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             if (valueType is ParameterizedTypeName) {
                 subTypes[valueType.rawType]?.forEach {
-                    val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
+                    val builderClass = getBuilderClassName(it)
 
                     val normalClass = ClassName(it.packageName, it.simpleName)
 
@@ -320,7 +320,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 }
             } else {
                 subTypes[valueType]?.forEach {
-                    val builderClass = ClassName(it.packageName, getBuilderName(it.simpleName))
+                    val builderClass = getBuilderClassName(it)
 
                     classBuilder.addFunction(
                         FunSpec.builder(it.simpleName.decapitalize())
@@ -438,15 +438,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         when (val declaration = type.declaration) {
             is KSClassDeclaration -> {
-                val packageName = declaration.packageName.asString()
-                val simpleName = declaration.simpleName.asString()
-
                 val typeParameters = type.arguments.map { it.asTypeName() }
 
                 return if (typeParameters.isNotEmpty()) {
-                    ClassName(packageName, simpleName).parameterizedBy(typeParameters)
+                    declaration.getClassName().parameterizedBy(typeParameters)
                 } else {
-                    ClassName(packageName, simpleName)
+                    declaration.getClassName()
                 }
             }
             is KSTypeParameter -> {
@@ -725,8 +722,30 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    fun getBuilderName(simpleName: String): String {
-        return "${simpleName}Builder"
+    fun getBuilderClassName(className: ClassName): ClassName {
+        try {
+            return builderClassesToWrite[className]!!.builderClassName
+        } catch (e: Exception) {
+            throw NullPointerException("asdf: $className")
+        }
+    }
+
+    fun KSClassDeclaration.getClassName(): ClassName {
+        if (containingFile == null) {
+            return ClassName(packageName.asString(), simpleName.asString())
+        }
+
+        val packageName = containingFile!!.packageName.asString()
+        val simpleName = simpleName.asString()
+
+        val parent = parentDeclaration
+
+        return if (parent != null && parent is KSClassDeclaration) {
+            val grandparentSimpleName = parent.simpleName.asString()
+            ClassName(packageName, grandparentSimpleName).nestedClass(simpleName)
+        } else {
+            ClassName(packageName, simpleName)
+        }
     }
 
     inner class BuilderVisitor : KSVisitorVoid() {
@@ -737,17 +756,24 @@ class GenerateBuilderProcessor : SymbolProcessor {
         override fun visitFunctionDeclaration(function: KSFunctionDeclaration, data: Unit) {
             val parent = function.parentDeclaration as KSClassDeclaration
             val packageName = parent.containingFile!!.packageName.asString()
-            val baseClassName = parent.simpleName.asString()
-            val builderClassName = ClassName(packageName, getBuilderName(baseClassName))
-            val baseClassType = ClassName(packageName, baseClassName)
+            val classSimpleName = parent.simpleName.asString()
             val containingFile = function.containingFile!!
+
+            val baseClassName = parent.getClassName()
+            val builderClassName: ClassName
+
+            if (baseClassName != baseClassName.topLevelClassName()) {
+                val grandparent = parent.parentDeclaration
+                val grandparentSimpleName = grandparent!!.simpleName.asString()
+                builderClassName = ClassName(packageName, grandparentSimpleName + classSimpleName + "Builder")
+            } else {
+                builderClassName = ClassName(packageName, classSimpleName + "Builder")
+            }
 
             val superTypes = parent.superTypes
 
             if (superTypes.isNotEmpty()) {
                 val superTypeNames = superTypes.map { it.asTypeName() }
-
-                val subClass = ClassName(packageName, baseClassName)
 
                 superTypeNames.forEach {
                     val rawClass = when (it) {
@@ -756,10 +782,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         else -> return@forEach
                     }
 
-                    val superClass =
-                        ClassName(rawClass.packageName, rawClass.simpleName)
-
-                    subTypes.getOrPut(superClass) { mutableListOf() }.add(subClass)
+                    subTypes.getOrPut(rawClass) { mutableListOf() }.add(baseClassName)
                 }
             }
 
@@ -816,13 +839,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
             // the ability to use generics!
             classBuilder.addSuperinterface(BUILDER_INTERFACE_NAME)
 
-            classBuilder.addFunction(generateBuildFunction(baseClassType, wrappedParameters, typeVariableNames))
+            classBuilder.addFunction(generateBuildFunction(baseClassName, wrappedParameters, typeVariableNames))
 
             classBuilder.addType(
                 TypeSpec.companionObjectBuilder()
                     .addFunction(
                         generateImmediateDynamicValuesGetter(
-                            baseClassType,
+                            baseClassName,
                             dynamicValues,
                             typeVariableNames.size
                         )
@@ -838,7 +861,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 BuilderModifier.valueOf(it.declaration.simpleName.asString())
             }
 
-            builderClassesToWrite[baseClassType] = ClassInfo(
+            builderClassesToWrite[baseClassName] = ClassInfo(
                 modifiers,
                 parent.typeParameters.isNotEmpty(),
                 Dependencies(true, containingFile),
