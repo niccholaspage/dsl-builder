@@ -240,7 +240,29 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 WildcardTypeName.producerOf(it.asTypeVariableName())
                             }
                         } else {
-                            superClassConstructorCall.resolve().arguments.map { it.asTypeName() }
+                            val declarationTypeParameters = superClassDeclaration.typeParameters
+
+                            superClassConstructorCall.resolve().arguments.zip(declarationTypeParameters) { typeArgument, typeParameter ->
+                                val typeName = typeArgument.asTypeName()
+
+                                if (typeName is ClassName) {
+                                    val typeVariableName = typeParameter.asTypeVariableName()
+
+                                    val variance = when (typeParameter.variance) {
+                                        Variance.CONTRAVARIANT -> KModifier.IN
+                                        Variance.COVARIANT -> KModifier.OUT
+                                        else -> null
+                                    }
+
+                                    if (variance != null) {
+                                        TypeVariableName(typeVariableName.name, typeVariableName.bounds, variance)
+                                    } else {
+                                        typeName
+                                    }
+                                } else {
+                                    typeName
+                                }
+                            }
                         }
 
                     val beginning = ClassName(
