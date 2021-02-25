@@ -233,8 +233,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         superClassDeclaration.simpleName.asString()
                     )
 
-                    File("C:\\Users\\nicch\\.ssh\\test.txt").writeText(superClassName.canonicalName)
-
                     val superClassInfo = builderClassesToWrite[superClassName]
 
                     val superClassTypeParameters =
