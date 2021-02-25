@@ -10,7 +10,6 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -270,11 +269,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     }
 
                     val listType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(
-                        if (valueType is ParameterizedTypeName) {
-                            valueType.rawType.parameterizedBy(STAR_PROJECTION)
-                        } else {
-                            valueType
-                        }
+                        valueType.rawType.parameterizedBy(MutableList(valueType.typeArguments.size) { STAR_PROJECTION })
                     )
 
                     classBuilder.addFunction(
