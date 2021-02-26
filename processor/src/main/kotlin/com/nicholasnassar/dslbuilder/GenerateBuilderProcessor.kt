@@ -773,17 +773,25 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val superTypes = parent.superTypes
 
             if (superTypes.isNotEmpty()) {
-                val superTypeNames = superTypes.map { it.asTypeName() }
+                fun resolveSuperTypes(superTypes: List<KSTypeReference>) {
+                    superTypes.forEach {
+                        val declaration = it.resolve().declaration
 
-                superTypeNames.forEach {
-                    val rawClass = when (it) {
-                        is ParameterizedTypeName -> it.rawType
-                        is ClassName -> it
-                        else -> return@forEach
+                        if (declaration is KSClassDeclaration) {
+                            resolveSuperTypes(declaration.superTypes)
+                        }
+
+                        val rawClass = when (val typeName = it.asTypeName()) {
+                            is ParameterizedTypeName -> typeName.rawType
+                            is ClassName -> typeName
+                            else -> return@forEach
+                        }
+
+                        subTypes.getOrPut(rawClass) { mutableListOf() }.add(baseClassName)
                     }
-
-                    subTypes.getOrPut(rawClass) { mutableListOf() }.add(baseClassName)
                 }
+
+                resolveSuperTypes(parent.superTypes)
             }
 
             val classBuilder = TypeSpec.classBuilder(builderClassName)
