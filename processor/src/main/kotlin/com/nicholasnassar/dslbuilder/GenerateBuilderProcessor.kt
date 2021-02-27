@@ -95,7 +95,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val parameterName = parameter.name!!.asString()
 
-                val superType = resolver.getClassDeclarationByName((rawType as ClassName).canonicalName)!!
+                val superType = resolver.getClassDeclarationByName((rawType as ClassName).canonicalName)
 
                 subTypes[rawType]?.forEach { subType ->
                     val functionName = subType.simpleName.decapitalize()
@@ -117,8 +117,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 declaration.qualifiedName!!.asString() == rawTypeClassName
                             }
 
-                        superClassConstructorCall?.resolve()?.arguments?.zip(superType.typeParameters) { argument, typeParameter ->
-                            val typeName = argument.asTypeName()
+                        if (superType != null) {
+                            superClassConstructorCall?.resolve()?.arguments?.zip(superType.typeParameters) { argument, typeParameter ->
+                                val typeName = argument.asTypeName()
 
 //                            when (typeParameter.variance) {
 //                                Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
@@ -126,11 +127,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
 //                                else -> typeName
 //                            }
 
-                            when (typeParameter.variance) {
-                                Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(typeName)
-                                Variance.COVARIANT -> WildcardTypeName.consumerOf(typeName)
-                                else -> typeName
+                                when (typeParameter.variance) {
+                                    Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(typeName)
+                                    Variance.COVARIANT -> WildcardTypeName.consumerOf(typeName)
+                                    else -> typeName
+                                }
                             }
+                        } else {
+                            null
                         }
                     } else {
                         null
