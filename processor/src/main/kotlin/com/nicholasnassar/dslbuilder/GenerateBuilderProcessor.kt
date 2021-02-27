@@ -730,11 +730,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     fun KSClassDeclaration.getClassName(): ClassName {
-        if (containingFile == null) {
-            return ClassName(packageName.asString(), simpleName.asString())
-        }
+//        if (containingFile == null) {
+//            return ClassName(packageName.asString(), simpleName.asString())
+//        }
 
-        val packageName = containingFile!!.packageName.asString()
+        //    val packageName = containingFile!!.packageName.asString()
+        val packageName = packageName.asString()
         val simpleName = simpleName.asString()
 
         val parent = parentDeclaration
