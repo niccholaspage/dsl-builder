@@ -239,11 +239,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         val declaration = typeReference.resolve().declaration
 
                         declaration == rawTypeClass
-                    }
-
-                    if (superClassConstructorCall == null) {
-                        return@forEach
-                    }
+                    } ?: return@forEach
 
                     val typeParameters = ktClass.typeParameters.map { it.asTypeVariableName() }
 
