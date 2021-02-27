@@ -108,7 +108,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     }
 
                     val typeArguments = if (classInfo.hasTypeParameters && type is ParameterizedTypeName) {
-                        val rawTypeClassName = (rawType as ClassName).canonicalName
+                        val rawTypeClassName = rawType.canonicalName
 
                         val superClassConstructorCall =
                             resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
@@ -232,10 +232,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 subTypes[valueType.rawType]?.forEach {
                     val builderClass = getBuilderClassName(it)
 
-                    val normalClass = ClassName(it.packageName, it.simpleName)
-
                     val ktClass =
-                        resolver.getClassDeclarationByName(resolver.getKSNameFromString(normalClass.canonicalName))!!
+                        resolver.getClassDeclarationByName(resolver.getKSNameFromString(it.canonicalName))!!
 
                     val superClassConstructorCall = ktClass.superTypes.find { typeReference ->
                         val declaration = typeReference.resolve().declaration
@@ -245,12 +243,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     val typeParameters = ktClass.typeParameters.map { it.asTypeVariableName() }
 
-                    val superClassDeclaration = superClassConstructorCall.resolve().declaration
+                    val superClassDeclaration = superClassConstructorCall.resolve().declaration as KSClassDeclaration
 
-                    val superClassName = ClassName(
-                        superClassDeclaration.packageName.asString(),
-                        superClassDeclaration.simpleName.asString()
-                    )
+                    val superClassName = superClassDeclaration.getClassName()
 
                     val superClassInfo = builderClassesToWrite[superClassName]
 
