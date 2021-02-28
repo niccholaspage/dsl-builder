@@ -235,15 +235,25 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     val ktClass =
                         resolver.getClassDeclarationByName(resolver.getKSNameFromString(it.canonicalName))!!
 
-                    val superClassConstructorCall = ktClass.superTypes.find { typeReference ->
-                        val declaration = typeReference.resolve().declaration
+                    fun findSuperClassReference(superTypes: List<KSTypeReference>): KSTypeReference? {
+                        return superTypes.find { typeReference ->
+                            val declaration = typeReference.resolve().declaration
 
-                        declaration == rawTypeClass
-                    } ?: return@forEach
+                            val recursiveCall = findSuperClassReference((declaration as KSClassDeclaration).superTypes)
+
+                            if (recursiveCall != null) {
+                                return recursiveCall
+                            } else {
+                                declaration == rawTypeClass
+                            }
+                        }
+                    }
+
+                    val superClassReference = findSuperClassReference(ktClass.superTypes)
 
                     val typeParameters = ktClass.typeParameters.map { it.asTypeVariableName() }
 
-                    val superClassDeclaration = superClassConstructorCall.resolve().declaration as KSClassDeclaration
+                    val superClassDeclaration = superClassReference!!.resolve().declaration as KSClassDeclaration
 
                     val superClassName = superClassDeclaration.getClassName()
 
@@ -251,13 +261,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     val superClassTypeParameters =
                         if (superClassInfo != null && superClassInfo.modifiers.contains(BuilderModifier.OPEN_COLLECTION_GENERIC)) {
-                            superClassConstructorCall.resolve().declaration.typeParameters.map {
+                            superClassReference.resolve().declaration.typeParameters.map {
                                 WildcardTypeName.producerOf(it.asTypeVariableName())
                             }
                         } else {
                             val declarationTypeParameters = superClassDeclaration.typeParameters
 
-                            superClassConstructorCall.resolve().arguments.zip(declarationTypeParameters) { typeArgument, typeParameter ->
+                            superClassReference.resolve().arguments.zip(declarationTypeParameters) { typeArgument, typeParameter ->
                                 val typeName = typeArgument.asTypeName()
 
                                 if (typeName is ClassName) {
