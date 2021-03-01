@@ -151,14 +151,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     )
                 }
 
-                val builderClassInfo = builderClassesToWrite[type]
+                val builderClassInfo = builderClassesToWrite[rawType]
 
                 if (builderClassInfo != null) {
+                    val builderClassName = if (type is ParameterizedTypeName) {
+                        builderClassInfo.builderClassName.parameterizedBy(type.typeArguments)
+                    } else {
+                        builderClassInfo.builderClassName
+                    }
+                    
                     classBuilder.addFunction(
                         generateBuilderForProperty(
                             parameterName,
                             parameterName,
-                            builderClassInfo.builderClassName,
+                            builderClassName,
                             null,
                             null
                         )
