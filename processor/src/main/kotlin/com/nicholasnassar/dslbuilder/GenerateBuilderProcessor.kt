@@ -159,7 +159,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     } else {
                         builderClassInfo.builderClassName
                     }
-                    
+
                     classBuilder.addFunction(
                         generateBuilderForProperty(
                             parameterName,
@@ -261,38 +261,16 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                     val superClassDeclaration = superClassReference!!.resolve().declaration as KSClassDeclaration
 
-                    val superClassName = superClassDeclaration.getClassName()
-
-                    val superClassInfo = builderClassesToWrite[superClassName]
+                    val declarationTypeParameters = superClassDeclaration.typeParameters
 
                     val superClassTypeParameters =
-                        if (superClassInfo != null && superClassInfo.modifiers.contains(BuilderModifier.OPEN_COLLECTION_GENERIC)) {
-                            superClassReference.resolve().declaration.typeParameters.map {
-                                WildcardTypeName.producerOf(it.asTypeVariableName())
-                            }
-                        } else {
-                            val declarationTypeParameters = superClassDeclaration.typeParameters
+                        superClassReference.resolve().arguments.zip(declarationTypeParameters) { typeArgument, typeParameter ->
+                            val typeName = typeArgument.asTypeName()
 
-                            superClassReference.resolve().arguments.zip(declarationTypeParameters) { typeArgument, typeParameter ->
-                                val typeName = typeArgument.asTypeName()
-
-                                if (typeName is ClassName) {
-                                    val typeVariableName = typeParameter.asTypeVariableName()
-
-                                    val variance = when (typeParameter.variance) {
-                                        Variance.CONTRAVARIANT -> KModifier.IN
-                                        Variance.COVARIANT -> KModifier.OUT
-                                        else -> null
-                                    }
-
-                                    if (variance != null) {
-                                        TypeVariableName(typeVariableName.name, typeVariableName.bounds, variance)
-                                    } else {
-                                        typeName
-                                    }
-                                } else {
-                                    typeName
-                                }
+                            when (typeParameter.variance) {
+                                Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(typeName)
+                                Variance.COVARIANT -> WildcardTypeName.consumerOf(typeName)
+                                else -> typeName
                             }
                         }
 
