@@ -1,5 +1,6 @@
 package com.nicholasnassar.dslbuilder
 
+import com.google.devtools.ksp.getAllSuperTypes
 import com.google.devtools.ksp.getClassDeclarationByName
 import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
@@ -10,6 +11,7 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -87,9 +89,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val type = parameter.type.asTypeName()
 
+                val necessaryTypeParameters: List<TypeName>?
+
                 val rawType = if (type is ParameterizedTypeName) {
+                    necessaryTypeParameters = type.typeArguments
+
                     type.rawType
                 } else {
+                    necessaryTypeParameters = null
+
                     type
                 }
 
@@ -97,7 +105,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val superType = resolver.getClassDeclarationByName((rawType as ClassName).canonicalName)
 
-                subTypes[rawType]?.forEach { subType ->
+                subTypes[rawType]?.forEach subTypeLoop@{ subType ->
                     val functionName = subType.simpleName.decapitalize()
                     val fixedParameterName = parameterName.capitalize()
 
@@ -107,7 +115,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
-                    val typeArguments = if (classInfo.hasTypeParameters && type is ParameterizedTypeName) {
+                    val typeArguments: List<TypeName>?
+
+                    if (type is ParameterizedTypeName) {
                         val rawTypeClassName = rawType.canonicalName
 
                         val superClassConstructorCall =
@@ -117,21 +127,95 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 declaration.qualifiedName!!.asString() == rawTypeClassName
                             }
 
-                        if (superType != null) {
-                            superClassConstructorCall?.resolve()?.arguments?.zip(superType.typeParameters) { argument, typeParameter ->
-                                val typeName = argument.asTypeName()
+                        val superConstructorCallArguments = superClassConstructorCall?.resolve()?.arguments
 
-                                when (typeParameter.variance) {
-                                    Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
-                                    Variance.COVARIANT -> WildcardTypeName.producerOf(typeName)
-                                    else -> typeName
+                        if (necessaryTypeParameters != null && superConstructorCallArguments != null) {
+                            val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
+
+                            val argumentTypes = superConstructorCallArguments.map { it.asTypeName() }
+
+                            // Compare the type parameters from the field to the argument types of the class.
+                            // If it doesn't fit then we return since we won't be able to generate a function
+                            // for our parameter that sets it to this particular type.
+
+                            necessaryTypeParameters.forEachIndexed { i, typeParameter ->
+                                val argumentType = argumentTypes[i]
+
+                                val varianceType = if (typeParameter is WildcardTypeName) {
+                                    if (typeParameter.inTypes.isNotEmpty()) {
+                                        Variance.CONTRAVARIANT
+                                    } else {
+                                        Variance.COVARIANT
+                                    }
+                                } else {
+                                    rawTypeDeclaration.typeParameters[i].variance
+                                }
+
+                                File("C:\\Users\\nicch\\Desktop\\test.txt").appendText("$typeParameter, $argumentType, ${rawTypeDeclaration.typeParameters}\n")
+
+                                if (typeParameter != argumentType) {
+                                    val argumentTypeClass = argumentType as ClassName
+
+                                    if (varianceType == Variance.CONTRAVARIANT) {
+                                        val inType = if (typeParameter is WildcardTypeName) {
+                                            typeParameter.inTypes[0] as ClassName
+                                        } else {
+                                            typeParameter as ClassName
+                                        }
+
+                                        val inTypeClass = resolver.getClassDeclarationByName(inType.canonicalName)!!
+
+                                        if (inTypeClass.getAllSuperTypes()
+                                                .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
+                                        ) {
+                                            return@subTypeLoop
+                                        }
+                                    } else if (varianceType == Variance.COVARIANT) {
+                                        val outType = if (typeParameter is WildcardTypeName) {
+                                            typeParameter.outTypes[0] as ClassName
+                                        } else {
+                                            typeParameter as ClassName
+                                        }
+
+                                        val argumentTypeResolvedClass =
+                                            resolver.getClassDeclarationByName(argumentType.canonicalName)!!
+
+                                        if (argumentTypeResolvedClass.getAllSuperTypes()
+                                                .all {
+                                                    it.declaration.qualifiedName!!.asString() != outType.canonicalName
+                                                }
+                                        ) {
+                                            return@subTypeLoop
+                                        }
+                                    } else {
+                                        // Class name or type variable name?
+                                        if (typeParameter != argumentType) {
+                                            return@subTypeLoop
+                                        }
+                                    }
                                 }
                             }
+                        }
+
+                        if (classInfo.hasTypeParameters) {
+                            typeArguments = if (superType != null) {
+                                superConstructorCallArguments?.zip(superType.typeParameters) { argument, typeParameter ->
+                                    val typeName = argument.asTypeName()
+
+                                    when (typeParameter.variance) {
+                                        Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
+                                        Variance.COVARIANT -> WildcardTypeName.producerOf(typeName)
+                                        else -> typeName
+                                    }
+                                }
+                            } else {
+                                null
+                            }
                         } else {
-                            null
+                            typeArguments = null
                         }
                     } else {
-                        null
+                        typeArguments = null
                     }
 
                     classBuilder.addFunction(
