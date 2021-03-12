@@ -213,8 +213,31 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                             return@subTypeLoop
                                         }
                                     } else {
-                                        // Class name or type variable name?
-                                        if (typeParameter != argumentType) {
+                                        val outType = if (typeParameter is TypeVariableName) {
+                                            val typeParameterIndex =
+                                                typeVariables.indexOfFirst { it.name == typeParameter.name }
+
+                                            if (typeParameter.bounds.isNotEmpty()) {
+                                                val bound = typeParameter.bounds[0] as ClassName
+
+                                                receiverTypeArguments[typeParameterIndex] = argumentTypeClass
+
+                                                bound
+                                            } else {
+                                                ANY
+                                            }
+                                        } else {
+                                            typeParameter as ClassName
+                                        }
+
+                                        val argumentTypeResolvedClass =
+                                            resolver.getClassDeclarationByName(argumentType.canonicalName)!!
+
+                                        if (outType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
+                                                .all {
+                                                    it.declaration.qualifiedName!!.asString() != outType.canonicalName
+                                                }
+                                        ) {
                                             return@subTypeLoop
                                         }
                                     }
