@@ -177,7 +177,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                                         val inTypeClass = resolver.getClassDeclarationByName(inType.canonicalName)!!
 
-                                        if (inTypeClass.getAllSuperTypes()
+                                        if (inType != argumentType && inTypeClass.getAllSuperTypes()
                                                 .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
                                         ) {
                                             return@subTypeLoop
@@ -204,7 +204,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                         val argumentTypeResolvedClass =
                                             resolver.getClassDeclarationByName(argumentType.canonicalName)!!
 
-                                        if (argumentTypeResolvedClass.getAllSuperTypes()
+                                        if (outType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
                                                 .all {
                                                     it.declaration.qualifiedName!!.asString() != outType.canonicalName
                                                 }
