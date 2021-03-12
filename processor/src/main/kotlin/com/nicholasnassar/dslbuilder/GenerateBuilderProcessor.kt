@@ -105,6 +105,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val superType = resolver.getClassDeclarationByName((rawType as ClassName).canonicalName)
 
+                val typeVariables = classBuilder.typeVariables
+
                 subTypes[rawType]?.forEach subTypeLoop@{ subType ->
                     val functionName = subType.simpleName.decapitalize()
                     val fixedParameterName = parameterName.capitalize()
@@ -115,7 +117,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
-                    val typeArguments: List<TypeName>?
+                    val receiverTypeArguments: MutableList<TypeName> = MutableList(typeVariables.size) { STAR_PROJECTION }
 
                     if (type is ParameterizedTypeName) {
                         val rawTypeClassName = rawType.canonicalName
@@ -151,14 +153,24 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                     rawTypeDeclaration.typeParameters[i].variance
                                 }
 
-                                File("C:\\Users\\nicch\\Desktop\\test.txt").appendText("$typeParameter, $argumentType, ${rawTypeDeclaration.typeParameters}\n")
-
                                 if (typeParameter != argumentType) {
                                     val argumentTypeClass = argumentType as ClassName
 
                                     if (varianceType == Variance.CONTRAVARIANT) {
                                         val inType = if (typeParameter is WildcardTypeName) {
                                             typeParameter.inTypes[0] as ClassName
+                                        } else if (typeParameter is TypeVariableName) {
+                                            val typeParameterIndex = typeVariables.indexOfFirst { it.name == typeParameter.name }
+
+                                            if (typeParameter.bounds.isNotEmpty()) {
+                                                val bound = typeParameter.bounds[0] as ClassName
+
+                                                receiverTypeArguments[typeParameterIndex] = WildcardTypeName.producerOf(argumentTypeClass)
+
+                                                bound
+                                            } else {
+                                                ANY
+                                            }
                                         } else {
                                             typeParameter as ClassName
                                         }
@@ -173,6 +185,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                     } else if (varianceType == Variance.COVARIANT) {
                                         val outType = if (typeParameter is WildcardTypeName) {
                                             typeParameter.outTypes[0] as ClassName
+                                        } else if (typeParameter is TypeVariableName) {
+                                            val typeParameterIndex = typeVariables.indexOfFirst { it.name == typeParameter.name }
+
+                                            if (typeParameter.bounds.isNotEmpty()) {
+                                                val bound = typeParameter.bounds[0] as ClassName
+
+                                                receiverTypeArguments[typeParameterIndex] = WildcardTypeName.consumerOf(argumentTypeClass)
+
+                                                bound
+                                            } else {
+                                                ANY
+                                            }
                                         } else {
                                             typeParameter as ClassName
                                         }
@@ -196,26 +220,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 }
                             }
                         }
-
-                        if (classInfo.hasTypeParameters) {
-                            typeArguments = if (superType != null) {
-                                superConstructorCallArguments?.zip(superType.typeParameters) { argument, typeParameter ->
-                                    val typeName = argument.asTypeName()
-
-                                    when (typeParameter.variance) {
-                                        Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
-                                        Variance.COVARIANT -> WildcardTypeName.producerOf(typeName)
-                                        else -> typeName
-                                    }
-                                }
-                            } else {
-                                null
-                            }
-                        } else {
-                            typeArguments = null
-                        }
-                    } else {
-                        typeArguments = null
                     }
 
                     classBuilder.addFunction(
@@ -224,7 +228,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                             parameterName,
                             getBuilderClassName(subType),
                             classInfo.builderClassName,
-                            typeArguments
+                            if (receiverTypeArguments.all { it == ANY }) null else receiverTypeArguments
                         )
                     )
                 }
