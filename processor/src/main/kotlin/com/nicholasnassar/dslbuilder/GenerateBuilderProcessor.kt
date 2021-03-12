@@ -547,7 +547,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         if (receiverClass != null && typeParameters != null) {
             builder.receiver(receiverClass.parameterizedBy(typeParameters))
-            builder.addCode("(this as %T).", receiverClass.parameterizedBy(typeParameters))
         }
 
         builder.addCode("$parameterName = %T().apply(init).build()", builderTypeName)
