@@ -11,7 +11,6 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -60,7 +59,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
     class ClassInfo(
         val modifiers: List<BuilderModifier>,
-        val hasTypeParameters: Boolean,
         val dependencies: Dependencies,
         val builderClassName: ClassName,
         val classBuilder: TypeSpec.Builder,
@@ -99,11 +97,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     necessaryTypeParameters = null
 
                     type
-                }
+                } as ClassName
 
                 val parameterName = parameter.name!!.asString()
-
-                val superType = resolver.getClassDeclarationByName((rawType as ClassName).canonicalName)
 
                 val typeVariables = classBuilder.typeVariables
 
@@ -117,7 +113,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
-                    val receiverTypeArguments: MutableList<TypeName> = MutableList(typeVariables.size) { STAR_PROJECTION }
+                    val receiverTypeArguments: MutableList<TypeName> =
+                        MutableList(typeVariables.size) { STAR_PROJECTION }
 
                     if (type is ParameterizedTypeName) {
                         val rawTypeClassName = rawType.canonicalName
@@ -160,12 +157,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                         val inType = if (typeParameter is WildcardTypeName) {
                                             typeParameter.inTypes[0] as ClassName
                                         } else if (typeParameter is TypeVariableName) {
-                                            val typeParameterIndex = typeVariables.indexOfFirst { it.name == typeParameter.name }
+                                            val typeParameterIndex =
+                                                typeVariables.indexOfFirst { it.name == typeParameter.name }
 
                                             if (typeParameter.bounds.isNotEmpty()) {
                                                 val bound = typeParameter.bounds[0] as ClassName
 
-                                                receiverTypeArguments[typeParameterIndex] = WildcardTypeName.producerOf(argumentTypeClass)
+                                                receiverTypeArguments[typeParameterIndex] =
+                                                    WildcardTypeName.producerOf(argumentTypeClass)
 
                                                 bound
                                             } else {
@@ -186,12 +185,14 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                         val outType = if (typeParameter is WildcardTypeName) {
                                             typeParameter.outTypes[0] as ClassName
                                         } else if (typeParameter is TypeVariableName) {
-                                            val typeParameterIndex = typeVariables.indexOfFirst { it.name == typeParameter.name }
+                                            val typeParameterIndex =
+                                                typeVariables.indexOfFirst { it.name == typeParameter.name }
 
                                             if (typeParameter.bounds.isNotEmpty()) {
                                                 val bound = typeParameter.bounds[0] as ClassName
 
-                                                receiverTypeArguments[typeParameterIndex] = WildcardTypeName.consumerOf(argumentTypeClass)
+                                                receiverTypeArguments[typeParameterIndex] =
+                                                    WildcardTypeName.consumerOf(argumentTypeClass)
 
                                                 bound
                                             } else {
@@ -796,7 +797,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             .build()
     }
 
-    fun getBuilderClassName(className: ClassName): ClassName {
+    private fun getBuilderClassName(className: ClassName): ClassName {
         try {
             return builderClassesToWrite[className]!!.builderClassName
         } catch (e: Exception) {
@@ -835,14 +836,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val containingFile = function.containingFile!!
 
             val baseClassName = parent.getClassName()
-            val builderClassName: ClassName
 
-            if (baseClassName != baseClassName.topLevelClassName()) {
+            val builderClassName = if (baseClassName != baseClassName.topLevelClassName()) {
                 val grandparent = parent.parentDeclaration
                 val grandparentSimpleName = grandparent!!.simpleName.asString()
-                builderClassName = ClassName(packageName, grandparentSimpleName + classSimpleName + "Builder")
+                ClassName(packageName, grandparentSimpleName + classSimpleName + "Builder")
             } else {
-                builderClassName = ClassName(packageName, classSimpleName + "Builder")
+                ClassName(packageName, classSimpleName + "Builder")
             }
 
             val superTypes = parent.superTypes
@@ -946,10 +946,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             builderClassesToWrite[baseClassName] = ClassInfo(
                 modifiers,
-                parent.typeParameters.isNotEmpty(),
                 Dependencies(true, containingFile),
-//                Dependencies.ALL_FILES,
                 builderClassName,
+//                Dependencies.ALL_FILES,
                 classBuilder,
                 wrappedParameters
             )
