@@ -120,27 +120,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     typeParameter as ClassName
                 }
 
-                val flipInheritance = varianceType == Variance.CONTRAVARIANT
+                val argumentTypeResolvedClass =
+                    resolver.getClassDeclarationByName(argumentType.canonicalName)!!
 
-                if (flipInheritance) {
-                    val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
-
-                    if (boundedType != argumentType && inTypeClass.getAllSuperTypes()
-                            .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
-                    ) {
-                        return null
-                    }
-                } else {
-                    val argumentTypeResolvedClass =
-                        resolver.getClassDeclarationByName(argumentType.canonicalName)!!
-
-                    if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
-                            .all {
-                                it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
-                            }
-                    ) {
-                        return null
-                    }
+                if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
+                        .all {
+                            it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
+                        }
+                ) {
+                    return null
                 }
             }
         }
@@ -216,7 +204,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
                             // If it doesn't fit then we return since we won't be able to generate a function
                             // for our parameter that sets it to this particular type.
 
-                            val result = handleReceiverType(typeVariables, necessaryTypeParameters, argumentTypes, rawTypeDeclaration)
+                            val result = handleReceiverType(
+                                typeVariables,
+                                necessaryTypeParameters,
+                                argumentTypes,
+                                rawTypeDeclaration
+                            )
                                 ?: return@subTypeLoop
 
                             receiverTypeArguments = result
