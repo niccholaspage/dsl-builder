@@ -93,89 +93,50 @@ class GenerateBuilderProcessor : SymbolProcessor {
             if (typeParameter != argumentType) {
                 val argumentTypeClass = argumentType as ClassName
 
-                if (varianceType == Variance.CONTRAVARIANT) {
-                    val inType = if (typeParameter is WildcardTypeName) {
-                        typeParameter.inTypes[0] as ClassName
-                    } else if (typeParameter is TypeVariableName) {
-                        val typeParameterIndex =
-                            typeVariables.indexOfFirst { it.name == typeParameter.name }
+                val boundedType = if (typeParameter is TypeVariableName) {
+                    val typeParameterIndex =
+                        typeVariables.indexOfFirst { it.name == typeParameter.name }
 
-                        if (typeParameter.bounds.isNotEmpty()) {
-                            val bound = typeParameter.bounds[0] as ClassName
+                    if (typeParameter.bounds.isNotEmpty()) {
+                        val bound = typeParameter.bounds[0] as ClassName
 
-                            receiverTypeArguments[typeParameterIndex] =
-                                WildcardTypeName.producerOf(argumentTypeClass)
-
-                            bound
-                        } else {
-                            ANY
+                        receiverTypeArguments[typeParameterIndex] = when (varianceType) {
+                            Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(argumentTypeClass)
+                            Variance.COVARIANT -> WildcardTypeName.consumerOf(argumentTypeClass)
+                            else -> argumentTypeClass
                         }
+
+                        bound
                     } else {
-                        typeParameter as ClassName
+                        ANY
                     }
+                } else if (typeParameter is WildcardTypeName) {
+                    when (varianceType) {
+                        Variance.CONTRAVARIANT -> typeParameter.inTypes[0] as ClassName
+                        Variance.COVARIANT -> typeParameter.outTypes[0] as ClassName
+                        else -> throw java.lang.IllegalArgumentException("???")
+                    }
+                } else {
+                    typeParameter as ClassName
+                }
 
-                    val inTypeClass = resolver.getClassDeclarationByName(inType.canonicalName)!!
+                val flipInheritance = varianceType == Variance.CONTRAVARIANT
 
-                    if (inType != argumentType && inTypeClass.getAllSuperTypes()
+                if (flipInheritance) {
+                    val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
+
+                    if (boundedType != argumentType && inTypeClass.getAllSuperTypes()
                             .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
                     ) {
                         return null
                     }
-                } else if (varianceType == Variance.COVARIANT) {
-                    val outType = if (typeParameter is WildcardTypeName) {
-                        typeParameter.outTypes[0] as ClassName
-                    } else if (typeParameter is TypeVariableName) {
-                        val typeParameterIndex =
-                            typeVariables.indexOfFirst { it.name == typeParameter.name }
-
-                        if (typeParameter.bounds.isNotEmpty()) {
-                            val bound = typeParameter.bounds[0] as ClassName
-
-                            receiverTypeArguments[typeParameterIndex] =
-                                WildcardTypeName.consumerOf(argumentTypeClass)
-
-                            bound
-                        } else {
-                            ANY
-                        }
-                    } else {
-                        typeParameter as ClassName
-                    }
-
-                    val argumentTypeResolvedClass =
-                        resolver.getClassDeclarationByName(argumentType.canonicalName)!!
-
-                    if (outType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
-                            .all {
-                                it.declaration.qualifiedName!!.asString() != outType.canonicalName
-                            }
-                    ) {
-                        return null
-                    }
                 } else {
-                    val outType = if (typeParameter is TypeVariableName) {
-                        val typeParameterIndex =
-                            typeVariables.indexOfFirst { it.name == typeParameter.name }
-
-                        if (typeParameter.bounds.isNotEmpty()) {
-                            val bound = typeParameter.bounds[0] as ClassName
-
-                            receiverTypeArguments[typeParameterIndex] = argumentTypeClass
-
-                            bound
-                        } else {
-                            ANY
-                        }
-                    } else {
-                        typeParameter as ClassName
-                    }
-
                     val argumentTypeResolvedClass =
                         resolver.getClassDeclarationByName(argumentType.canonicalName)!!
 
-                    if (outType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
+                    if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
                             .all {
-                                it.declaration.qualifiedName!!.asString() != outType.canonicalName
+                                it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
                             }
                     ) {
                         return null
