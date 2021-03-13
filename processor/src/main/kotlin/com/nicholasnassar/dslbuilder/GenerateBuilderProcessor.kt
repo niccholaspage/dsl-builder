@@ -136,6 +136,69 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return receiverTypeArguments
     }
 
+    class SubtypeInfo(val subType: ClassName, val builderClassName: ClassName, val receiverTypeArguments: List<TypeName>?)
+
+    private fun getSubtypeInfoFor(type: TypeName, typeVariables: List<TypeVariableName>): List<SubtypeInfo> {
+        val necessaryTypeParameters: List<TypeName>?
+
+        val rawType = if (type is ParameterizedTypeName) {
+            necessaryTypeParameters = type.typeArguments
+
+            type.rawType
+        } else {
+            necessaryTypeParameters = null
+
+            type
+        } as ClassName
+
+        val subtypeInfos = mutableListOf<SubtypeInfo>()
+
+        subTypes[rawType]?.forEach subTypeLoop@{ subType ->
+            val receiverTypeArguments: List<TypeName>
+
+            if (type is ParameterizedTypeName) {
+                val rawTypeClassName = rawType.canonicalName
+
+                val superClassConstructorCall =
+                    resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
+                        val declaration = typeReference.resolve().declaration
+
+                        declaration.qualifiedName!!.asString() == rawTypeClassName
+                    }
+
+                val superConstructorCallArguments = superClassConstructorCall?.resolve()?.arguments
+
+                if (necessaryTypeParameters != null && superConstructorCallArguments != null) {
+                    val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
+
+                    val argumentTypes = superConstructorCallArguments.map { it.asTypeName() }
+
+                    // Compare the type parameters from the field to the argument types of the class.
+                    // If it doesn't fit then we return since we won't be able to generate a function
+                    // for our parameter that sets it to this particular type.
+
+                    val result = handleReceiverType(
+                        typeVariables,
+                        necessaryTypeParameters,
+                        argumentTypes,
+                        rawTypeDeclaration
+                    )
+                        ?: return@subTypeLoop
+
+                    receiverTypeArguments = result
+                } else {
+                    receiverTypeArguments = listOf(ANY)
+                }
+            } else {
+                receiverTypeArguments = listOf(ANY)
+            }
+
+            subtypeInfos.add(SubtypeInfo(subType, getBuilderClassName(subType), if (receiverTypeArguments.all { it == ANY }) null else receiverTypeArguments))
+        }
+
+        return subtypeInfos
+    }
+
     override fun finish() {
         builderClassesToWrite.forEach { (className, classInfo) ->
             val builderClass = classInfo.builderClassName
@@ -155,24 +218,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val type = parameter.type.asTypeName()
 
-                val necessaryTypeParameters: List<TypeName>?
-
-                val rawType = if (type is ParameterizedTypeName) {
-                    necessaryTypeParameters = type.typeArguments
-
-                    type.rawType
-                } else {
-                    necessaryTypeParameters = null
-
-                    type
-                } as ClassName
-
                 val parameterName = parameter.name!!.asString()
 
                 val typeVariables = classBuilder.typeVariables
 
-                subTypes[rawType]?.forEach subTypeLoop@{ subType ->
-                    val functionName = subType.simpleName.decapitalize()
+                val rawType = if (type is ParameterizedTypeName) {
+                    type.rawType
+                } else {
+                    type
+                } as ClassName
+
+                val subtypeInfo = getSubtypeInfoFor(type, typeVariables)
+
+                subtypeInfo.forEach { info ->
+                    val functionName = info.subType.simpleName.decapitalize()
                     val fixedParameterName = parameterName.capitalize()
 
                     val newFunctionName = if (functionName.endsWith(fixedParameterName)) {
@@ -181,52 +240,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
-                    val receiverTypeArguments: List<TypeName>
-
-                    if (type is ParameterizedTypeName) {
-                        val rawTypeClassName = rawType.canonicalName
-
-                        val superClassConstructorCall =
-                            resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
-                                val declaration = typeReference.resolve().declaration
-
-                                declaration.qualifiedName!!.asString() == rawTypeClassName
-                            }
-
-                        val superConstructorCallArguments = superClassConstructorCall?.resolve()?.arguments
-
-                        if (necessaryTypeParameters != null && superConstructorCallArguments != null) {
-                            val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
-
-                            val argumentTypes = superConstructorCallArguments.map { it.asTypeName() }
-
-                            // Compare the type parameters from the field to the argument types of the class.
-                            // If it doesn't fit then we return since we won't be able to generate a function
-                            // for our parameter that sets it to this particular type.
-
-                            val result = handleReceiverType(
-                                typeVariables,
-                                necessaryTypeParameters,
-                                argumentTypes,
-                                rawTypeDeclaration
-                            )
-                                ?: return@subTypeLoop
-
-                            receiverTypeArguments = result
-                        } else {
-                            receiverTypeArguments = listOf(ANY)
-                        }
-                    } else {
-                        receiverTypeArguments = listOf(ANY)
-                    }
-
                     classBuilder.addFunction(
                         generateBuilderForProperty(
                             newFunctionName,
                             parameterName,
-                            getBuilderClassName(subType),
+                            getBuilderClassName(info.subType),
                             classInfo.builderClassName,
-                            if (receiverTypeArguments.all { it == ANY }) null else receiverTypeArguments
+                            info.receiverTypeArguments
                         )
                     )
                 }
