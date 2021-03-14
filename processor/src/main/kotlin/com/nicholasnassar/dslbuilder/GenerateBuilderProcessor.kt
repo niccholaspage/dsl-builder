@@ -11,6 +11,7 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -153,42 +154,44 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         val subtypeInfos = mutableListOf<SubtypeInfo>()
 
+//        File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("locating type $type\n")
+
         subTypes[rawType]?.forEach subTypeLoop@{ subType ->
             val receiverTypeArguments: List<TypeName>
 
-            if (type is ParameterizedTypeName) {
-                val rawTypeClassName = rawType.canonicalName
+            val rawTypeClassName = rawType.canonicalName
 
-                val superClassConstructorCall =
-                    resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
-                        val declaration = typeReference.resolve().declaration
+            val superClassConstructorCall =
+                resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
+                    val declaration = typeReference.resolve().declaration
 
-                        declaration.qualifiedName!!.asString() == rawTypeClassName
-                    }
-
-                val superConstructorCallArguments = superClassConstructorCall?.resolve()?.arguments
-
-                if (necessaryTypeParameters != null && superConstructorCallArguments != null) {
-                    val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
-
-                    val argumentTypes = superConstructorCallArguments.map { it.asTypeName() }
-
-                    // Compare the type parameters from the field to the argument types of the class.
-                    // If it doesn't fit then we return since we won't be able to generate a function
-                    // for our parameter that sets it to this particular type.
-
-                    val result = handleReceiverType(
-                        typeVariables,
-                        necessaryTypeParameters,
-                        argumentTypes,
-                        rawTypeDeclaration
-                    )
-                        ?: return@subTypeLoop
-
-                    receiverTypeArguments = result
-                } else {
-                    receiverTypeArguments = listOf(ANY)
+                    declaration.qualifiedName!!.asString() == rawTypeClassName
                 }
+
+            val superConstructorCallArguments = superClassConstructorCall?.resolve()?.arguments
+
+//            File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("$necessaryTypeParameters <--> $superConstructorCallArguments\n")
+
+            if (necessaryTypeParameters != null && superConstructorCallArguments != null) {
+//                File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("double\n")
+
+                val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
+
+                val argumentTypes = superConstructorCallArguments.map { it.asTypeName() }
+
+                // Compare the type parameters from the field to the argument types of the class.
+                // If it doesn't fit then we return since we won't be able to generate a function
+                // for our parameter that sets it to this particular type.
+
+                val result = handleReceiverType(
+                    typeVariables,
+                    necessaryTypeParameters,
+                    argumentTypes,
+                    rawTypeDeclaration
+                )
+                    ?: return@subTypeLoop
+
+                receiverTypeArguments = result
             } else {
                 receiverTypeArguments = listOf(ANY)
             }
@@ -300,6 +303,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val classBuilder = TypeSpec.classBuilder(className)
 
+            val actualTypeVariables = rawTypeClass.typeParameters.map { it.asTypeVariableName() }
+
             val parameters = rawTypeClass.typeParameters.map {
                 val typeVariableName = it.asTypeVariableName()
 
@@ -337,7 +342,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
             )
 
-            val subtypeInfo = getSubtypeInfoFor(valueType, parameters)
+            val actualClass = if (actualTypeVariables.isEmpty()) {
+                rawType
+            } else {
+                rawType.parameterizedBy(actualTypeVariables)
+            }
+
+            val subtypeInfo = getSubtypeInfoFor(actualClass, parameters)
 
             subtypeInfo.forEach { info ->
                 classBuilder.addFunction(
