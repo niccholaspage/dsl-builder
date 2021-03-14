@@ -121,15 +121,27 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     typeParameter as ClassName
                 }
 
-                val argumentTypeResolvedClass =
-                    resolver.getClassDeclarationByName(argumentType.canonicalName)!!
+                val flipInheritance = varianceType == Variance.CONTRAVARIANT
 
-                if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
-                        .all {
-                            it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
-                        }
-                ) {
-                    return null
+                if (flipInheritance) {
+                    val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
+
+                    if (boundedType != argumentType && inTypeClass.getAllSuperTypes()
+                            .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
+                    ) {
+                        return null
+                    }
+                } else {
+                    val argumentTypeResolvedClass =
+                        resolver.getClassDeclarationByName(argumentType.canonicalName)!!
+
+                    if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
+                            .all {
+                                it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
+                            }
+                    ) {
+                        return null
+                    }
                 }
             }
         }
@@ -154,7 +166,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         val subtypeInfos = mutableListOf<SubtypeInfo>()
 
-//        File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("locating type $type\n")
+        File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("locating type $type\n")
 
         subTypes[rawType]?.forEach subTypeLoop@{ subType ->
             val receiverTypeArguments: List<TypeName>
@@ -162,18 +174,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val rawTypeClassName = rawType.canonicalName
 
             val superClassConstructorCall =
-                resolver.getClassDeclarationByName(subType.canonicalName)?.superTypes?.find { typeReference ->
-                    val declaration = typeReference.resolve().declaration
+                resolver.getClassDeclarationByName(subType.canonicalName)?.getAllSuperTypes()?.find { typeReference ->
+                    val declaration = typeReference.declaration
 
                     declaration.qualifiedName!!.asString() == rawTypeClassName
                 }
 
-            val superConstructorCallArguments = superClassConstructorCall?.resolve()?.arguments
+            val superConstructorCallArguments = superClassConstructorCall?.arguments
 
-//            File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("$necessaryTypeParameters <--> $superConstructorCallArguments\n")
+            File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("$subType: $necessaryTypeParameters <--> $superClassConstructorCall\n")
 
             if (necessaryTypeParameters != null && superConstructorCallArguments != null) {
-//                File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("double\n")
+                File("C:\\Users\\nicch\\Desktop\\text.txt").appendText("double\n")
 
                 val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
 
