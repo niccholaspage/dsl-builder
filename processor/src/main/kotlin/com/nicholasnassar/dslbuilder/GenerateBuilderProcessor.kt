@@ -246,7 +246,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                             parameterName,
                             getBuilderClassName(info.subType),
                             classInfo.builderClassName,
-                            info.receiverTypeArguments
+                            info.receiverTypeArguments,
+                            false
                         )
                     )
                 }
@@ -266,7 +267,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                             parameterName,
                             builderClassName,
                             null,
-                            null
+                            null,
+                            false
                         )
                     )
                 }
@@ -283,8 +285,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         // Now, let's generate our builders for our collections.
         for ((builderClassName, collectionBuilderInfo) in collectionBuildersToGenerate) {
+            val rawType = collectionBuilderInfo.rawTypeArgumentClass
             val rawTypeClass =
-                resolver.getClassDeclarationByName(resolver.getKSNameFromString(collectionBuilderInfo.rawTypeArgumentClass.canonicalName))!!
+                resolver.getClassDeclarationByName(resolver.getKSNameFromString(rawType.canonicalName))!!
             val dependencyFiles = collectionBuilderInfo.dependencyFiles.toTypedArray()
 
             val packageName = builderClassName.packageName
@@ -334,93 +337,19 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     .addParameter("value", valueType).addCode("parentCollection.add(value)").build()
             )
 
-            if (valueType is ParameterizedTypeName) {
-                subTypes[valueType.rawType]?.forEach {
-                    val builderClass = getBuilderClassName(it)
+            val subtypeInfo = getSubtypeInfoFor(valueType, parameters)
 
-                    val ktClass =
-                        resolver.getClassDeclarationByName(resolver.getKSNameFromString(it.canonicalName))!!
-
-                    fun findSuperClassReference(superTypes: List<KSTypeReference>): KSTypeReference? {
-                        return superTypes.find { typeReference ->
-                            val declaration = typeReference.resolve().declaration
-
-                            val recursiveCall = findSuperClassReference((declaration as KSClassDeclaration).superTypes)
-
-                            if (recursiveCall != null) {
-                                return recursiveCall
-                            } else {
-                                declaration == rawTypeClass
-                            }
-                        }
-                    }
-
-                    val superClassReference = findSuperClassReference(ktClass.superTypes)
-
-                    val typeParameters = ktClass.typeParameters.map { it.asTypeVariableName() }
-
-                    val superClassDeclaration = superClassReference!!.resolve().declaration as KSClassDeclaration
-
-                    val declarationTypeParameters = superClassDeclaration.typeParameters
-
-                    val superClassTypeParameters =
-                        superClassReference.resolve().arguments.zip(declarationTypeParameters) { typeArgument, typeParameter ->
-                            val typeName = typeArgument.asTypeName()
-
-                            when (typeParameter.variance) {
-                                Variance.CONTRAVARIANT -> WildcardTypeName.consumerOf(typeName)
-                                Variance.COVARIANT -> WildcardTypeName.producerOf(typeName)
-                                else -> typeName
-                            }
-                        }
-
-                    val beginning = ClassName(
-                        packageName,
-                        className
+            subtypeInfo.forEach { info ->
+                classBuilder.addFunction(
+                    generateBuilderForProperty(
+                        info.subType.simpleName.decapitalize(),
+                        "parentCollection",
+                        getBuilderClassName(info.subType),
+                        builderClassName,
+                        info.receiverTypeArguments,
+                        true
                     )
-
-                    val receiverType = if (superClassTypeParameters.isEmpty()) {
-                        beginning
-                    } else {
-                        beginning.parameterizedBy(superClassTypeParameters)
-                    }
-
-                    val parameterizedBuilderClass = if (typeParameters.isEmpty()) {
-                        builderClass
-                    } else {
-                        builderClass.parameterizedBy(typeParameters)
-                    }
-
-                    val listType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(
-                        valueType.rawType.parameterizedBy(MutableList(valueType.typeArguments.size) { STAR_PROJECTION })
-                    )
-
-                    classBuilder.addFunction(
-                        FunSpec.builder(it.simpleName.decapitalize()).receiver(receiverType)
-                            .addParameter(
-                                ParameterSpec(
-                                    "init",
-                                    LambdaTypeName.get(parameterizedBuilderClass, emptyList(), UNIT)
-                                )
-                            )
-                            .addCode(
-                                "(parentCollection as %T).add(%T().apply(init).build())",
-                                listType,
-                                parameterizedBuilderClass
-                            )
-                            .build()
-                    )
-                }
-            } else {
-                subTypes[valueType]?.forEach {
-                    val builderClass = getBuilderClassName(it)
-
-                    classBuilder.addFunction(
-                        FunSpec.builder(it.simpleName.decapitalize())
-                            .addParameter(ParameterSpec("init", LambdaTypeName.get(builderClass, emptyList(), UNIT)))
-                            .addCode("parentCollection.add(%T().apply(init).build())", builderClass).build()
-                    )
-                }
+                )
             }
 
             val rawValueType = if (valueType is ParameterizedTypeName) {
@@ -554,6 +483,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         builderTypeName: TypeName,
         receiverClass: ClassName?,
         typeParameters: List<TypeName>?,
+        isCollectionMethod: Boolean
     ): FunSpec {
         val builder = FunSpec.builder(functionName)
             .addParameter(
@@ -567,7 +497,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
             builder.receiver(receiverClass.parameterizedBy(typeParameters))
         }
 
-        builder.addCode("$parameterName = %T().apply(init).build()", builderTypeName)
+        if (isCollectionMethod) {
+            builder.addCode("$parameterName.add(%T().apply(init).build())", builderTypeName)
+        } else {
+            builder.addCode("$parameterName = %T().apply(init).build()", builderTypeName)
+        }
 
         return builder.build()
     }
