@@ -314,7 +314,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 else -> throw IllegalArgumentException("weird exception at collection stuff.")
             }
 
-            val mutableCollectionType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(valueType)
+            val mutableCollectionType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(WildcardTypeName.consumerOf(valueType))
 
             classBuilder.addTypeVariables(parameters)
 
