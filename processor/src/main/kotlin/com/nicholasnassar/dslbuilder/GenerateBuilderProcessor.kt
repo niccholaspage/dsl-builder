@@ -11,7 +11,6 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -520,10 +519,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
             builder.receiver(receiverClass.parameterizedBy(typeParameters))
         }
 
+        var returnType = builderTypeName
+
+        if (receiverClass != null && returnType is ClassName) {
+            typeParameters?.forEach {
+                if (it is TypeVariableName) {
+                    returnType = (returnType as ClassName).parameterizedBy(it)
+                }
+            }
+        }
+
         if (isCollectionMethod) {
-            builder.addCode("$parameterName.add(%T().apply(init).build())", builderTypeName)
+            builder.addCode("$parameterName.add(%T().apply(init).build())", returnType)
         } else {
-            builder.addCode("$parameterName = %T().apply(init).build()", builderTypeName)
+            builder.addCode("$parameterName = %T().apply(init).build()", returnType)
         }
 
         return builder.build()
