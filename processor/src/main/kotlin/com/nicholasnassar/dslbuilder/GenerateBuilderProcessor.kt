@@ -521,11 +521,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
         var returnType = builderTypeName
 
-        if (receiverClass != null && returnType is ClassName) {
-            typeParameters?.forEach {
-                if (it is TypeVariableName) {
-                    returnType = (returnType as ClassName).parameterizedBy(it)
-                }
+        if (receiverClass != null && returnType is ClassName && typeParameters != null) {
+            val newParameters = typeParameters.filterIsInstance<TypeVariableName>()
+
+            if (newParameters.isNotEmpty()) {
+                returnType = returnType.parameterizedBy(newParameters)
             }
         }
 
