@@ -507,18 +507,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
         typeParameters: List<TypeName>?,
         isCollectionMethod: Boolean
     ): FunSpec {
-        val builder = FunSpec.builder(functionName)
-            .addParameter(
-                ParameterSpec.builder(
-                    "init",
-                    LambdaTypeName.get(builderTypeName, emptyList(), UNIT_CLASS)
-                ).build()
-            )
-
-        if (receiverClass != null && typeParameters != null) {
-            builder.receiver(receiverClass.parameterizedBy(typeParameters))
-        }
-
         var returnType = builderTypeName
 
         if (receiverClass != null && returnType is ClassName && typeParameters != null) {
@@ -527,6 +515,18 @@ class GenerateBuilderProcessor : SymbolProcessor {
             if (newParameters.isNotEmpty()) {
                 returnType = returnType.parameterizedBy(newParameters)
             }
+        }
+
+        val builder = FunSpec.builder(functionName)
+            .addParameter(
+                ParameterSpec.builder(
+                    "init",
+                    LambdaTypeName.get(returnType, emptyList(), UNIT_CLASS)
+                ).build()
+            )
+
+        if (receiverClass != null && typeParameters != null) {
+            builder.receiver(receiverClass.parameterizedBy(typeParameters))
         }
 
         if (isCollectionMethod) {
