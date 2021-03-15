@@ -134,6 +134,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 ) {
                     return null
                 }
+            } else if (typeParameter is TypeVariableName) {
+                receiverTypeArguments[i] = TypeVariableName(typeParameter.name)
             }
         }
 
