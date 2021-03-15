@@ -11,7 +11,6 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -113,8 +112,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     }
                 } else if (typeParameter is WildcardTypeName) {
                     when (varianceType) {
-                        Variance.CONTRAVARIANT -> typeParameter.inTypes[0] as ClassName
                         Variance.COVARIANT -> typeParameter.outTypes[0] as ClassName
+                        Variance.CONTRAVARIANT -> typeParameter.inTypes[0] as ClassName
                         else -> throw java.lang.IllegalArgumentException("???")
                     }
                 } else {
@@ -124,13 +123,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 val flipInheritance = varianceType == Variance.CONTRAVARIANT
 
                 if (flipInheritance) {
-                    val argumentTypeResolvedClass =
-                        resolver.getClassDeclarationByName(argumentType.canonicalName)!!
+                    val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
 
-                    if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
-                            .all {
-                                it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
-                            }
+                    if (boundedType != argumentType && inTypeClass.getAllSuperTypes()
+                            .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
                     ) {
                         return null
                     }
@@ -152,7 +148,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
         return receiverTypeArguments
     }
 
-    class SubtypeInfo(val subType: ClassName, val builderClassName: ClassName, val receiverTypeArguments: List<TypeName>?)
+    class SubtypeInfo(
+        val subType: ClassName,
+        val builderClassName: ClassName,
+        val receiverTypeArguments: List<TypeName>?
+    )
 
     private fun getSubtypeInfoFor(type: TypeName, typeVariables: List<TypeVariableName>): List<SubtypeInfo> {
         val necessaryTypeParameters: List<TypeName>?
@@ -205,7 +205,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 receiverTypeArguments = listOf(ANY)
             }
 
-            subtypeInfos.add(SubtypeInfo(subType, getBuilderClassName(subType), if (receiverTypeArguments.all { it == ANY }) null else receiverTypeArguments))
+            subtypeInfos.add(
+                SubtypeInfo(
+                    subType,
+                    getBuilderClassName(subType),
+                    if (receiverTypeArguments.all { it == ANY }) null else receiverTypeArguments
+                )
+            )
         }
 
         return subtypeInfos
@@ -328,7 +334,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 else -> throw IllegalArgumentException("weird exception at collection stuff.")
             }
 
-            val mutableCollectionType = MUTABLE_COLLECTION_CLASSES.parameterizedBy(WildcardTypeName.consumerOf(valueType))
+            val mutableCollectionType =
+                MUTABLE_COLLECTION_CLASSES.parameterizedBy(WildcardTypeName.consumerOf(valueType))
 
             classBuilder.addTypeVariables(parameters)
 
@@ -357,7 +364,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 rawType.parameterizedBy(actualTypeVariables)
             }
 
-            val subtypeInfo = getSubtypeInfoFor(actualClass, parameters)
+            val subtypeInfo = getSubtypeInfoFor(actualClass, actualTypeVariables)
 
             subtypeInfo.forEach { info ->
                 classBuilder.addFunction(
