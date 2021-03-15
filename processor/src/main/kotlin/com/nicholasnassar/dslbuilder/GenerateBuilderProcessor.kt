@@ -517,6 +517,20 @@ class GenerateBuilderProcessor : SymbolProcessor {
             }
         }
 
+        if (returnType is ParameterizedTypeName) {
+            returnType = returnType.rawType.parameterizedBy(returnType.typeArguments.map {
+                if (it is WildcardTypeName) {
+                    if (it.inTypes.isNotEmpty()) {
+                        it.inTypes[0]
+                    } else {
+                        it.outTypes[0]
+                    }
+                } else {
+                    it
+                }
+            })
+        }
+
         val builder = FunSpec.builder(functionName)
             .addParameter(
                 ParameterSpec.builder(
