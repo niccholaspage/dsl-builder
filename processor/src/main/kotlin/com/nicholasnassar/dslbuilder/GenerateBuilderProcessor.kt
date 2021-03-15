@@ -11,6 +11,7 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -28,6 +29,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         private val MUTABLE_COLLECTION_CLASSES = ClassName("kotlin.collections", "MutableCollection")
         private val SET_CLASS = ClassName("kotlin.collections", "Set")
         private val UNIT_CLASS = ClassName("kotlin", "Unit")
+        private val ANY_NULLABLE = ANY.copy(true)
     }
 
     private lateinit var codeGenerator: CodeGenerator
@@ -80,25 +82,33 @@ class GenerateBuilderProcessor : SymbolProcessor {
         necessaryTypeParameters.forEachIndexed { i, typeParameter ->
             val argumentType = argumentTypes[i]
 
-            val varianceType = if (typeParameter is WildcardTypeName) {
-                if (typeParameter.inTypes.isNotEmpty()) {
-                    Variance.CONTRAVARIANT
-                } else {
-                    Variance.COVARIANT
-                }
-            } else {
-                rawTypeDeclaration.typeParameters[i].variance
-            }
-
             if (typeParameter != argumentType) {
+                val realTypeParameter: TypeName
+
+                val varianceType = if (typeParameter is WildcardTypeName) {
+                    if (typeParameter.inTypes.isNotEmpty()) {
+                        realTypeParameter = typeParameter.inTypes[0]
+
+                        Variance.CONTRAVARIANT
+                    } else {
+                        realTypeParameter = typeParameter.outTypes[0]
+
+                        Variance.COVARIANT
+                    }
+                } else {
+                    realTypeParameter = typeParameter
+
+                    rawTypeDeclaration.typeParameters[i].variance
+                }
+
                 val argumentTypeClass = argumentType as ClassName
 
-                val boundedType = if (typeParameter is TypeVariableName) {
+                val boundedType = if (realTypeParameter is TypeVariableName) {
                     val typeParameterIndex =
-                        typeVariables.indexOfFirst { it.name == typeParameter.name }
+                        typeVariables.indexOfFirst { it.name == realTypeParameter.name }
 
-                    if (typeParameter.bounds.isNotEmpty()) {
-                        val bound = typeParameter.bounds[0] as ClassName
+                    if (realTypeParameter.bounds.isNotEmpty()) {
+                        val bound = realTypeParameter.bounds[0] as ClassName
 
                         receiverTypeArguments[typeParameterIndex] = when (varianceType) {
                             Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(argumentTypeClass)
@@ -110,14 +120,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     } else {
                         ANY
                     }
-                } else if (typeParameter is WildcardTypeName) {
-                    when (varianceType) {
-                        Variance.COVARIANT -> typeParameter.outTypes[0] as ClassName
-                        Variance.CONTRAVARIANT -> typeParameter.inTypes[0] as ClassName
-                        else -> throw java.lang.IllegalArgumentException("???")
-                    }
                 } else {
-                    typeParameter as ClassName
+                    realTypeParameter as ClassName
                 }
 
                 val flipInheritance = varianceType == Variance.CONTRAVARIANT
@@ -125,7 +129,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 if (flipInheritance) {
                     val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
 
-                    if (boundedType != argumentType && inTypeClass.getAllSuperTypes()
+                    if (boundedType != ANY_NULLABLE && boundedType != argumentType && inTypeClass.getAllSuperTypes()
                             .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
                     ) {
                         return null
