@@ -124,27 +124,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     realTypeParameter as ClassName
                 }
 
-                val flipInheritance = varianceType == Variance.CONTRAVARIANT
+                val argumentTypeResolvedClass =
+                    resolver.getClassDeclarationByName(argumentType.canonicalName)!!
 
-                if (flipInheritance) {
-                    val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
-
-                    if (boundedType != ANY_NULLABLE && boundedType != argumentType && inTypeClass.getAllSuperTypes()
-                            .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
-                    ) {
-                        return null
-                    }
-                } else {
-                    val argumentTypeResolvedClass =
-                        resolver.getClassDeclarationByName(argumentType.canonicalName)!!
-
-                    if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
-                            .all {
-                                it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
-                            }
-                    ) {
-                        return null
-                    }
+                if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
+                        .all {
+                            it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
+                        }
+                ) {
+                    return null
                 }
             }
         }
@@ -487,11 +475,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     private fun KSTypeReference.asTypeName(): TypeName {
-        val type = resolve()
+        return resolve().asTypeName()
+    }
 
-        when (val declaration = type.declaration) {
+    private fun KSType.asTypeName(): TypeName {
+        when (val declaration = declaration) {
             is KSClassDeclaration -> {
-                val typeParameters = type.arguments.map { it.asTypeName() }
+                val typeParameters = arguments.map { it.asTypeName() }
 
                 return if (typeParameters.isNotEmpty()) {
                     declaration.getClassName().parameterizedBy(typeParameters)
@@ -827,28 +817,16 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 ClassName(packageName, classSimpleName + "Builder")
             }
 
-            val superTypes = parent.superTypes
+            val superTypes = parent.getAllSuperTypes()
 
-            if (superTypes.isNotEmpty()) {
-                fun resolveSuperTypes(superTypes: List<KSTypeReference>) {
-                    superTypes.forEach {
-                        val declaration = it.resolve().declaration
-
-                        if (declaration is KSClassDeclaration) {
-                            resolveSuperTypes(declaration.superTypes)
-                        }
-
-                        val rawClass = when (val typeName = it.asTypeName()) {
-                            is ParameterizedTypeName -> typeName.rawType
-                            is ClassName -> typeName
-                            else -> return@forEach
-                        }
-
-                        subTypes.getOrPut(rawClass) { mutableListOf() }.add(baseClassName)
-                    }
+            superTypes.forEach {
+                val rawClass = when (val typeName = it.asTypeName()) {
+                    is ParameterizedTypeName -> typeName.rawType
+                    is ClassName -> typeName
+                    else -> return@forEach
                 }
 
-                resolveSuperTypes(parent.superTypes)
+                subTypes.getOrPut(rawClass) { mutableListOf() }.add(baseClassName)
             }
 
             val classBuilder = TypeSpec.classBuilder(builderClassName)
