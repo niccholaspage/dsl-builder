@@ -11,7 +11,6 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
-import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -71,15 +70,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val subTypes = mutableMapOf<ClassName, MutableList<ClassName>>()
 
     private fun handleReceiverType(
-        typeVariables: List<TypeVariableName>,
-        necessaryTypeParameters: List<TypeName>,
+        receiverTypeVariables: List<TypeVariableName>,
+        necessaryTypeParametersForSuperClass: List<TypeName>,
         argumentTypes: List<TypeName>,
         rawTypeDeclaration: KSClassDeclaration
     ): List<TypeName>? {
         val receiverTypeArguments: MutableList<TypeName> =
-            MutableList(typeVariables.size) { STAR_PROJECTION }
+            MutableList(receiverTypeVariables.size) { STAR_PROJECTION }
 
-        necessaryTypeParameters.forEachIndexed { i, typeParameter ->
+        necessaryTypeParametersForSuperClass.forEachIndexed { i, typeParameter ->
             val argumentType = argumentTypes[i]
 
             if (typeParameter != argumentType) {
@@ -113,7 +112,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val boundedType = if (realTypeParameter is TypeVariableName) {
                     val typeParameterIndex =
-                        typeVariables.indexOfFirst { it.name == realTypeParameter.name }
+                        receiverTypeVariables.indexOfFirst { it.name == realTypeParameter.name }
 
                     if (realTypeParameter.bounds.isNotEmpty()) {
                         val bound = realTypeParameter.bounds[0] as ClassName
@@ -135,7 +134,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 val argumentTypeResolvedClass =
                     resolver.getClassDeclarationByName(argumentTypeClass.canonicalName)!!
 
-                if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
+                if (boundedType != argumentTypeClass && argumentTypeResolvedClass.getAllSuperTypes()
                         .all {
                             it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
                         }
@@ -156,7 +155,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val receiverTypeArguments: List<TypeName>?
     )
 
-    private fun getSubtypeInfoFor(type: TypeName): List<SubtypeInfo> {
+    private fun getSubtypeInfoFor(type: TypeName, receiverTypeVariables: List<TypeVariableName>): List<SubtypeInfo> {
         val necessaryTypeParameters: List<TypeName>?
 
         val rawType = if (type is ParameterizedTypeName) {
@@ -168,10 +167,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             type
         } as ClassName
-
-        val classTypeVariables = resolver.getClassDeclarationByName(rawType.canonicalName)!!.typeParameters.map {
-            it.asTypeVariableName()
-        }
 
         val subtypeInfos = mutableListOf<SubtypeInfo>()
 
@@ -199,7 +194,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 // for our parameter that sets it to this particular type.
 
                 val result = handleReceiverType(
-                    classTypeVariables,
+                    receiverTypeVariables,
                     necessaryTypeParameters,
                     argumentTypes,
                     rawTypeDeclaration
@@ -232,6 +227,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val fileBuilder = FileSpec.builder(builderClass.packageName, builderClass.simpleName)
 
+            val actualTypeVariablesForClass =
+                resolver.getClassDeclarationByName(className.canonicalName)!!.typeParameters.map { it.asTypeVariableName() }
+
             val classBuilder = classInfo.classBuilder
 
             // One of the parameters has a builder,
@@ -250,7 +248,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     type
                 } as ClassName
 
-                val subtypeInfo = getSubtypeInfoFor(type)
+                val subtypeInfo = getSubtypeInfoFor(type, actualTypeVariablesForClass)
 
                 subtypeInfo.forEach { info ->
                     val functionName = info.subType.simpleName.decapitalize()
@@ -368,7 +366,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 rawType.parameterizedBy(actualTypeVariables)
             }
 
-            val subtypeInfo = getSubtypeInfoFor(actualClass)
+            val subtypeInfo = getSubtypeInfoFor(actualClass, actualTypeVariables)
 
             subtypeInfo.forEach { info ->
                 classBuilder.addFunction(
