@@ -69,112 +69,32 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private val builderClassesToWrite = mutableMapOf<ClassName, ClassInfo>()
     private val subTypes = mutableMapOf<ClassName, MutableList<ClassName>>()
 
-    private fun handleReceiverType(
-        receiverTypeVariables: List<TypeVariableName>,
-        necessaryTypeParametersForSuperClass: List<TypeName>,
-        argumentTypes: List<TypeName>,
-        rawTypeDeclaration: KSClassDeclaration
-    ): List<TypeName>? {
-        val receiverTypeArguments: MutableList<TypeName> =
-            MutableList(receiverTypeVariables.size) { STAR_PROJECTION }
-
-        necessaryTypeParametersForSuperClass.forEachIndexed { i, typeParameter ->
-            val argumentType = argumentTypes[i]
-
-            if (typeParameter != argumentType) {
-                val realTypeParameter: TypeName
-
-                val varianceType = if (typeParameter is WildcardTypeName) {
-                    if (typeParameter.inTypes.isNotEmpty()) {
-                        realTypeParameter = typeParameter.inTypes[0]
-
-                        Variance.CONTRAVARIANT
-                    } else {
-                        realTypeParameter = typeParameter.outTypes[0]
-
-                        Variance.COVARIANT
-                    }
-                } else {
-                    realTypeParameter = typeParameter
-
-                    rawTypeDeclaration.typeParameters[i].variance
-                }
-
-                val argumentTypeClass = if (argumentType is TypeVariableName) {
-                    if (argumentType.bounds.isNotEmpty()) {
-                        argumentType.bounds[0] as ClassName
-                    } else {
-                        ANY
-                    }
-                } else {
-                    argumentType as ClassName
-                }
-
-                val boundedType = if (realTypeParameter is TypeVariableName) {
-                    val typeParameterIndex =
-                        receiverTypeVariables.indexOfFirst { it.name == realTypeParameter.name }
-
-                    if (realTypeParameter.bounds.isNotEmpty()) {
-                        val bound = realTypeParameter.bounds[0] as ClassName
-
-                        receiverTypeArguments[typeParameterIndex] = when (varianceType) {
-                            Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(argumentTypeClass)
-                            Variance.COVARIANT -> WildcardTypeName.consumerOf(argumentTypeClass)
-                            else -> argumentTypeClass
-                        }
-
-                        bound
-                    } else {
-                        ANY
-                    }
-                } else {
-                    realTypeParameter as ClassName
-                }
-
-                val argumentTypeResolvedClass =
-                    resolver.getClassDeclarationByName(argumentTypeClass.canonicalName)!!
-
-                if (boundedType != argumentTypeClass && argumentTypeResolvedClass.getAllSuperTypes()
-                        .all {
-                            it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
-                        }
-                ) {
-                    return null
-                }
-            } else if (typeParameter is TypeVariableName) {
-                receiverTypeArguments[i] = TypeVariableName(typeParameter.name)
-            }
-        }
-
-        return receiverTypeArguments
-    }
-
     class SubtypeInfo(
-        val subType: ClassName,
-        val builderClassName: ClassName,
+        val builderParameters: List<TypeName>,
+        val rawSubType: ClassName,
         val receiverTypeArguments: List<TypeName>?
     )
 
     private fun getSubtypeInfoFor(type: TypeName, receiverTypeVariables: List<TypeVariableName>): List<SubtypeInfo> {
-        val necessaryTypeParameters: List<TypeName>?
+        val necessaryTypeParametersForSuperClass: List<TypeName>?
 
         val rawType = if (type is ParameterizedTypeName) {
-            necessaryTypeParameters = type.typeArguments
+            necessaryTypeParametersForSuperClass = type.typeArguments
 
             type.rawType
         } else {
-            necessaryTypeParameters = null
+            necessaryTypeParametersForSuperClass = null
 
             type
         } as ClassName
 
+        val rawTypeClassName = rawType.canonicalName
+
+        val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
+
         val subtypeInfos = mutableListOf<SubtypeInfo>()
 
         subTypes[rawType]?.forEach subTypeLoop@{ subType ->
-            val receiverTypeArguments: List<TypeName>
-
-            val rawTypeClassName = rawType.canonicalName
-
             val superClassConstructorCall =
                 resolver.getClassDeclarationByName(subType.canonicalName)?.getAllSuperTypes()?.find { typeReference ->
                     val declaration = typeReference.declaration
@@ -184,32 +104,95 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val superConstructorCallArguments = superClassConstructorCall?.arguments
 
-            if (necessaryTypeParameters != null && superConstructorCallArguments != null) {
-                val rawTypeDeclaration = resolver.getClassDeclarationByName(rawTypeClassName)!!
+            val builderParameters = mutableListOf<TypeName>()
 
+            val receiverTypeArguments: MutableList<TypeName> = MutableList(receiverTypeVariables.size) { STAR_PROJECTION }
+
+            if (necessaryTypeParametersForSuperClass != null && superConstructorCallArguments != null) {
                 val argumentTypes = superConstructorCallArguments.map { it.asTypeName() }
 
                 // Compare the type parameters from the field to the argument types of the class.
                 // If it doesn't fit then we return since we won't be able to generate a function
                 // for our parameter that sets it to this particular type.
 
-                val result = handleReceiverType(
-                    receiverTypeVariables,
-                    necessaryTypeParameters,
-                    argumentTypes,
-                    rawTypeDeclaration
-                )
-                    ?: return@subTypeLoop
+                necessaryTypeParametersForSuperClass.forEachIndexed { i, typeParameter ->
+                    val argumentType = argumentTypes[i]
 
-                receiverTypeArguments = result
-            } else {
-                receiverTypeArguments = listOf(ANY)
+                    if (typeParameter != argumentType) {
+                        val realTypeParameter: TypeName
+
+                        val varianceType = if (typeParameter is WildcardTypeName) {
+                            if (typeParameter.inTypes.isNotEmpty()) {
+                                realTypeParameter = typeParameter.inTypes[0]
+
+                                Variance.CONTRAVARIANT
+                            } else {
+                                realTypeParameter = typeParameter.outTypes[0]
+
+                                Variance.COVARIANT
+                            }
+                        } else {
+                            realTypeParameter = typeParameter
+
+                            rawTypeDeclaration.typeParameters[i].variance
+                        }
+
+                        val argumentTypeClass = if (argumentType is TypeVariableName) {
+                            val argumentTypeClassBound = if (argumentType.bounds.isNotEmpty()) {
+                                argumentType.bounds[0] as ClassName
+                            } else {
+                                ANY
+                            }
+
+                            builderParameters.add(argumentTypeClassBound)
+
+                            argumentTypeClassBound
+                        } else {
+                            argumentType as ClassName
+                        }
+
+                        val boundedType = if (realTypeParameter is TypeVariableName) {
+                            val typeParameterIndex =
+                                receiverTypeVariables.indexOfFirst { it.name == realTypeParameter.name }
+
+                            if (realTypeParameter.bounds.isNotEmpty()) {
+                                val bound = realTypeParameter.bounds[0] as ClassName
+
+                                receiverTypeArguments[typeParameterIndex] = when (varianceType) {
+                                    Variance.CONTRAVARIANT -> WildcardTypeName.producerOf(argumentTypeClass)
+                                    Variance.COVARIANT -> WildcardTypeName.consumerOf(argumentTypeClass)
+                                    else -> argumentTypeClass
+                                }
+
+                                bound
+                            } else {
+                                ANY
+                            }
+                        } else {
+                            realTypeParameter as ClassName
+                        }
+
+                        val argumentTypeResolvedClass =
+                            resolver.getClassDeclarationByName(argumentTypeClass.canonicalName)!!
+
+                        if (boundedType != argumentTypeClass && argumentTypeResolvedClass.getAllSuperTypes()
+                                .all {
+                                    it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
+                                }
+                        ) {
+                            return@subTypeLoop
+                        }
+                    } else if (typeParameter is TypeVariableName) {
+                        receiverTypeArguments[i] = TypeVariableName(typeParameter.name)
+                    }
+                }
+
             }
 
             subtypeInfos.add(
                 SubtypeInfo(
+                    builderParameters,
                     subType,
-                    getBuilderClassName(subType),
                     if (receiverTypeArguments.all { it == ANY }) null else receiverTypeArguments
                 )
             )
@@ -251,7 +234,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 val subtypeInfo = getSubtypeInfoFor(type, actualTypeVariablesForClass)
 
                 subtypeInfo.forEach { info ->
-                    val functionName = info.subType.simpleName.decapitalize()
+                    val functionName = info.rawSubType.simpleName.decapitalize()
                     val fixedParameterName = parameterName.capitalize()
 
                     val newFunctionName = if (functionName.endsWith(fixedParameterName)) {
@@ -260,11 +243,17 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         functionName + fixedParameterName
                     }
 
+                    val builder = if (info.builderParameters.isNotEmpty()) {
+                        getBuilderClassName(info.rawSubType).parameterizedBy(info.builderParameters)
+                    } else {
+                        getBuilderClassName(info.rawSubType)
+                    }
+
                     classBuilder.addFunction(
                         generateBuilderForProperty(
                             newFunctionName,
                             parameterName,
-                            getBuilderClassName(info.subType),
+                            builder,
                             classInfo.builderClassName,
                             info.receiverTypeArguments,
                             false
@@ -371,9 +360,9 @@ class GenerateBuilderProcessor : SymbolProcessor {
             subtypeInfo.forEach { info ->
                 classBuilder.addFunction(
                     generateBuilderForProperty(
-                        info.subType.simpleName.decapitalize(),
+                        info.rawSubType.simpleName.decapitalize(),
                         "parentCollection",
-                        getBuilderClassName(info.subType),
+                        getBuilderClassName(info.rawSubType),
                         builderClassName,
                         info.receiverTypeArguments,
                         true
