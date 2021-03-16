@@ -156,7 +156,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         val receiverTypeArguments: List<TypeName>?
     )
 
-    private fun getSubtypeInfoFor(type: TypeName, typeVariables: List<TypeVariableName>): List<SubtypeInfo> {
+    private fun getSubtypeInfoFor(type: TypeName): List<SubtypeInfo> {
         val necessaryTypeParameters: List<TypeName>?
 
         val rawType = if (type is ParameterizedTypeName) {
@@ -168,6 +168,10 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             type
         } as ClassName
+
+        val classTypeVariables = resolver.getClassDeclarationByName(rawType.canonicalName)!!.typeParameters.map {
+            it.asTypeVariableName()
+        }
 
         val subtypeInfos = mutableListOf<SubtypeInfo>()
 
@@ -195,7 +199,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 // for our parameter that sets it to this particular type.
 
                 val result = handleReceiverType(
-                    typeVariables,
+                    classTypeVariables,
                     necessaryTypeParameters,
                     argumentTypes,
                     rawTypeDeclaration
@@ -240,15 +244,13 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
                 val parameterName = parameter.name!!.asString()
 
-                val typeVariables = classBuilder.typeVariables
-
                 val rawType = if (type is ParameterizedTypeName) {
                     type.rawType
                 } else {
                     type
                 } as ClassName
 
-                val subtypeInfo = getSubtypeInfoFor(type, typeVariables)
+                val subtypeInfo = getSubtypeInfoFor(type)
 
                 subtypeInfo.forEach { info ->
                     val functionName = info.subType.simpleName.decapitalize()
@@ -366,7 +368,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 rawType.parameterizedBy(actualTypeVariables)
             }
 
-            val subtypeInfo = getSubtypeInfoFor(actualClass, actualTypeVariables)
+            val subtypeInfo = getSubtypeInfoFor(actualClass)
 
             subtypeInfo.forEach { info ->
                 classBuilder.addFunction(
