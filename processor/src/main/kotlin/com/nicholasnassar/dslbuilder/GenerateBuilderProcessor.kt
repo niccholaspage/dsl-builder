@@ -11,6 +11,7 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import java.io.File
 
 class GenerateBuilderProcessor : SymbolProcessor {
     companion object {
@@ -100,7 +101,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                     rawTypeDeclaration.typeParameters[i].variance
                 }
 
-                val argumentTypeClass = argumentType as ClassName
+                val argumentTypeClass = if (argumentType is TypeVariableName) {
+                    if (argumentType.bounds.isNotEmpty()) {
+                        argumentType.bounds[0] as ClassName
+                    } else {
+                        ANY
+                    }
+                } else {
+                    argumentType as ClassName
+                }
 
                 val boundedType = if (realTypeParameter is TypeVariableName) {
                     val typeParameterIndex =
@@ -124,7 +133,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                 }
 
                 val argumentTypeResolvedClass =
-                    resolver.getClassDeclarationByName(argumentType.canonicalName)!!
+                    resolver.getClassDeclarationByName(argumentTypeClass.canonicalName)!!
 
                 if (boundedType != argumentType && argumentTypeResolvedClass.getAllSuperTypes()
                         .all {
