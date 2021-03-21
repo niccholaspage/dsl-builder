@@ -145,7 +145,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                                 ANY
                             }
 
-                            builderParameters.add(argumentTypeClassBound)
+                            builderParameters.add(typeParameter)
 
                             argumentTypeClassBound
                         } else {
