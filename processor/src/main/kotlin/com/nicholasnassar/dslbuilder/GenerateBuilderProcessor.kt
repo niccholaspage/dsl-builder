@@ -176,10 +176,15 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         val flipInheritance = varianceType == Variance.CONTRAVARIANT
 
                         if (flipInheritance) {
+                            val argumentTypeResolvedClass =
+                                resolver.getClassDeclarationByName(argumentTypeClass.canonicalName)!!
                             val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
 
                             if (boundedType != ANY_NULLABLE && boundedType != argumentTypeClass && inTypeClass.getAllSuperTypes()
-                                    .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
+                                    .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName } && argumentTypeResolvedClass.getAllSuperTypes()
+                                    .all {
+                                        it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
+                                    }
                             ) {
                                 return@subTypeLoop
                             }
