@@ -106,7 +106,8 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             val builderParameters = mutableListOf<TypeName>()
 
-            val receiverTypeArguments: MutableList<TypeName> = MutableList(receiverTypeVariables.size) { STAR_PROJECTION }
+            val receiverTypeArguments: MutableList<TypeName> =
+                MutableList(receiverTypeVariables.size) { STAR_PROJECTION }
 
             if (necessaryTypeParametersForSuperClass != null && superConstructorCallArguments != null) {
                 val argumentTypes = superConstructorCallArguments.map { it.asTypeName() }
@@ -172,15 +173,27 @@ class GenerateBuilderProcessor : SymbolProcessor {
                             realTypeParameter as ClassName
                         }
 
-                        val argumentTypeResolvedClass =
-                            resolver.getClassDeclarationByName(argumentTypeClass.canonicalName)!!
+                        val flipInheritance = varianceType == Variance.CONTRAVARIANT
 
-                        if (boundedType != argumentTypeClass && argumentTypeResolvedClass.getAllSuperTypes()
-                                .all {
-                                    it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
-                                }
-                        ) {
-                            return@subTypeLoop
+                        if (flipInheritance) {
+                            val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
+
+                            if (boundedType != ANY_NULLABLE && boundedType != argumentType && inTypeClass.getAllSuperTypes()
+                                    .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
+                            ) {
+                                return@subTypeLoop
+                            }
+                        } else {
+                            val argumentTypeResolvedClass =
+                                resolver.getClassDeclarationByName(argumentTypeClass.canonicalName)!!
+
+                            if (boundedType != argumentTypeClass && argumentTypeResolvedClass.getAllSuperTypes()
+                                    .all {
+                                        it.declaration.qualifiedName!!.asString() != boundedType.canonicalName
+                                    }
+                            ) {
+                                return@subTypeLoop
+                            }
                         }
                     } else if (typeParameter is TypeVariableName) {
                         receiverTypeArguments[i] = TypeVariableName(typeParameter.name)
