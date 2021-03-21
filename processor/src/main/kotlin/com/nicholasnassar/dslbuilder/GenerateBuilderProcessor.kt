@@ -178,7 +178,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
                         if (flipInheritance) {
                             val inTypeClass = resolver.getClassDeclarationByName(boundedType.canonicalName)!!
 
-                            if (boundedType != ANY_NULLABLE && boundedType != argumentType && inTypeClass.getAllSuperTypes()
+                            if (boundedType != ANY_NULLABLE && boundedType != argumentTypeClass && inTypeClass.getAllSuperTypes()
                                     .all { it.declaration.qualifiedName!!.asString() != argumentTypeClass.canonicalName }
                             ) {
                                 return@subTypeLoop
