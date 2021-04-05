@@ -13,7 +13,7 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 open class Pet(val name: String, val breed: String)
 
 fun main() {
-    PersonBuilder().apply {
+    val person = PersonBuilder().apply {
         firstName = "Nicholas"
         lastName = "Nassar"
 
@@ -21,6 +21,8 @@ fun main() {
             name = "ZuZu"
             breed = "Yorkie"
         }
-    }
+    }.build()
+
+    println("Hi, I'm ${person.firstName} ${person.lastName}!")
 }
 ```
