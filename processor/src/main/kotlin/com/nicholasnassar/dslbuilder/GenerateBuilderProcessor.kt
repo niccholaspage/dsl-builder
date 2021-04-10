@@ -6,7 +6,6 @@ import com.google.devtools.ksp.processing.*
 import com.google.devtools.ksp.symbol.*
 import com.google.devtools.ksp.validate
 import com.nicholasnassar.dslbuilder.api.Builder
-import com.nicholasnassar.dslbuilder.api.annotation.BuilderModifier
 import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
@@ -42,12 +41,12 @@ class GenerateBuilderProcessor : SymbolProcessor {
     private lateinit var rollingDynamicValueClass: ClassName
     private lateinit var dslMarkerAnnotationClass: ClassName
 
-    private val collectionToMutableClasses = setOf("List", "Set").map {
+    private val collectionToMutableClasses = setOf("List", "Set").associate {
         ClassName("kotlin.collections", it) to ClassName(
             "kotlin.collections",
             "Mutable$it"
         )
-    }.toMap()
+    }
 
     private val collectionBuildersToGenerate = mutableMapOf<ClassName, CollectionBuilderInfo>()
 
@@ -59,7 +58,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
     }
 
     class ClassInfo(
-        val modifiers: List<BuilderModifier>,
         val dependencies: Dependencies,
         val builderClassName: ClassName,
         val classBuilder: TypeSpec.Builder,
@@ -939,18 +937,11 @@ class GenerateBuilderProcessor : SymbolProcessor {
             val annotation =
                 parent.annotations.find { it.annotationType.resolve().declaration.qualifiedName!!.asString() == GENERATE_BUILDER_ANNOTATION }!!
 
-            val modifiersArgument = annotation.arguments.find { it.name!!.asString() == "modifiers" }!!
-
-            val modifiers = (modifiersArgument.value as List<KSType>).map {
-                BuilderModifier.valueOf(it.declaration.simpleName.asString())
-            }
-
             builderClassesToWrite[baseClassName] = ClassInfo(
-                modifiers,
                 Dependencies(true, containingFile),
                 builderClassName,
-//                Dependencies.ALL_FILES,
                 classBuilder,
+//                Dependencies.ALL_FILES,
                 wrappedParameters
             )
         }
