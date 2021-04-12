@@ -6,7 +6,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    environment: PUBLISH
 
     steps:
       - uses: actions/checkout@v2
@@ -34,5 +33,5 @@ jobs:
       - name: Publish snapshot to GitHub Packages
         run: ./gradlew publish
         env:
-          GITHUB_ACTOR: ${{ environment.REPO_USER }}
-          GITHUB_TOKEN: ${{ environment.REPO_PASS }}
+          GITHUB_ACTOR: ${{ secrets.REPO_USER }}
+          GITHUB_TOKEN: ${{ secrets.REPO_PASS }}
