@@ -17,11 +17,10 @@ dependencies {
 publishing {
     repositories {
         maven {
-            name = "GitHubPackages"
-            url = uri("https://maven.pkg.github.com/niccholaspage/dsl-builder")
+            url = uri("https://repo.nicholasnassar.com/")
             credentials {
-                username = System.getenv("GITHUB_ACTOR")
-                password = System.getenv("GITHUB_TOKEN")
+                username = System.getenv("REPO_USER")
+                password = System.getenv("REPO_PASSWORD")
             }
         }
     }
