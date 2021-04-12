@@ -33,5 +33,5 @@ jobs:
       - name: Publish snapshot to GitHub Packages
         run: ./gradlew publish
         env:
-          GITHUB_ACTOR: ${{ secrets.REPO_USER }}
-          GITHUB_TOKEN: ${{ secrets.REPO_PASS }}
+          REPO_USER: ${{ secrets.REPO_USER }}
+          REPO_PASS: ${{ secrets.REPO_PASS }}
