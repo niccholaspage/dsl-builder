@@ -17,7 +17,9 @@ dependencies {
 publishing {
     repositories {
         maven {
-            url = uri("https://repo.nicholasnassar.com/")
+            val releasesRepoUrl = "https://repo.nicholasnassar.com/releases"
+            val snapshotsRepoUrl = "https://repo.nicholasnassar.com/snapshots"
+            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
             credentials {
                 username = System.getenv("REPO_USER")
                 password = System.getenv("REPO_PASSWORD")
