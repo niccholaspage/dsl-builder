@@ -24,6 +24,9 @@ publishing {
                 username = System.getenv("REPO_USER")
                 password = System.getenv("REPO_PASSWORD")
             }
+            authentication {
+                create<BasicAuthentication>("basic")
+            }
         }
     }
 
