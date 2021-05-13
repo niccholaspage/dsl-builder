@@ -11,7 +11,22 @@ import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 
-class GenerateBuilderProcessor : SymbolProcessor {
+class GenerateBuilderProcessorProvider : SymbolProcessorProvider {
+    override fun create(
+        options: Map<String, String>,
+        kotlinVersion: KotlinVersion,
+        codeGenerator: CodeGenerator,
+        logger: KSPLogger
+    ): SymbolProcessor {
+        return GenerateBuilderProcessor(codeGenerator, logger, options)
+    }
+}
+
+class GenerateBuilderProcessor(
+    val codeGenerator: CodeGenerator,
+    val logger: KSPLogger,
+    val options: Map<String, String>
+) : SymbolProcessor {
     companion object {
         private const val DYNAMIC_VALUE_SUFFIX = "DynamicValue"
 
@@ -30,16 +45,40 @@ class GenerateBuilderProcessor : SymbolProcessor {
         private val ANY_NULLABLE = ANY.copy(true)
     }
 
-    private lateinit var codeGenerator: CodeGenerator
-    private lateinit var logger: KSPLogger
     private lateinit var resolver: Resolver
 
-    private lateinit var contextClass: ClassName
-    private lateinit var dynamicValueClass: ClassName
-    private lateinit var staticDynamicValueClass: ClassName
-    private lateinit var computedDynamicValueClass: ClassName
-    private lateinit var rollingDynamicValueClass: ClassName
-    private lateinit var dslMarkerAnnotationClass: ClassName
+    private val contextClass: ClassName
+    private val dynamicValueClass: ClassName
+    private val staticDynamicValueClass: ClassName
+    private val computedDynamicValueClass: ClassName
+    private val rollingDynamicValueClass: ClassName
+    private val dslMarkerAnnotationClass: ClassName
+
+    init {
+        val contextClassName = options["context_class"]
+        require(contextClassName != null) { "context_class cannot be null!" }
+        contextClass = ClassName.bestGuess(contextClassName)
+
+        val dynamicValueClassName = options["dynamic_value_class"]
+        require(dynamicValueClassName != null) { "dynamic_value_class cannot be null!" }
+        dynamicValueClass = ClassName.bestGuess(dynamicValueClassName)
+
+        val staticDynamicValueClassName = options["static_dynamic_value_class"]
+        require(staticDynamicValueClassName != null) { "static_dynamic_value_class cannot be null!" }
+        staticDynamicValueClass = ClassName.bestGuess(staticDynamicValueClassName)
+
+        val computedDynamicValueClassName = options["computed_dynamic_value_class"]
+        require(computedDynamicValueClassName != null) { "computed_dynamic_value_class cannot be null!" }
+        computedDynamicValueClass = ClassName.bestGuess(computedDynamicValueClassName)
+
+        val rollingDynamicValueClassName = options["rolling_dynamic_value_class"]
+        require(rollingDynamicValueClassName != null) { "rolling_dynamic_value_class cannot be null!" }
+        rollingDynamicValueClass = ClassName.bestGuess(rollingDynamicValueClassName)
+
+        val dslMarkerAnnotationClassName = options["dsl_marker_annotation_class"]
+        require(dslMarkerAnnotationClassName != null) { "dsl_marker_annotation_class cannot be null!" }
+        dslMarkerAnnotationClass = ClassName.bestGuess(dslMarkerAnnotationClassName)
+    }
 
     private val collectionToMutableClasses = setOf("List", "Set").associate {
         ClassName("kotlin.collections", it) to ClassName(
@@ -423,40 +462,6 @@ class GenerateBuilderProcessor : SymbolProcessor {
 
             file.close()
         }
-    }
-
-    override fun init(
-        options: Map<String, String>,
-        kotlinVersion: KotlinVersion,
-        codeGenerator: CodeGenerator,
-        logger: KSPLogger
-    ) {
-        this.codeGenerator = codeGenerator
-        this.logger = logger
-
-        val contextClassName = options["context_class"]
-        require(contextClassName != null) { "context_class cannot be null!" }
-        contextClass = ClassName.bestGuess(contextClassName)
-
-        val dynamicValueClassName = options["dynamic_value_class"]
-        require(dynamicValueClassName != null) { "dynamic_value_class cannot be null!" }
-        dynamicValueClass = ClassName.bestGuess(dynamicValueClassName)
-
-        val staticDynamicValueClassName = options["static_dynamic_value_class"]
-        require(staticDynamicValueClassName != null) { "static_dynamic_value_class cannot be null!" }
-        staticDynamicValueClass = ClassName.bestGuess(staticDynamicValueClassName)
-
-        val computedDynamicValueClassName = options["computed_dynamic_value_class"]
-        require(computedDynamicValueClassName != null) { "computed_dynamic_value_class cannot be null!" }
-        computedDynamicValueClass = ClassName.bestGuess(computedDynamicValueClassName)
-
-        val rollingDynamicValueClassName = options["rolling_dynamic_value_class"]
-        require(rollingDynamicValueClassName != null) { "rolling_dynamic_value_class cannot be null!" }
-        rollingDynamicValueClass = ClassName.bestGuess(rollingDynamicValueClassName)
-
-        val dslMarkerAnnotationClassName = options["dsl_marker_annotation_class"]
-        require(dslMarkerAnnotationClassName != null) { "dsl_marker_annotation_class cannot be null!" }
-        dslMarkerAnnotationClass = ClassName.bestGuess(dslMarkerAnnotationClassName)
     }
 
     override fun process(resolver: Resolver): List<KSAnnotated> {
