@@ -466,7 +466,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
         symbols
             .filter { it is KSClassDeclaration && it.validate() }
             .map { it.accept(BuilderVisitor(), Unit) }
-        return ret
+        return ret.toList()
     }
 
     private fun KSTypeParameter.asTypeVariableName(): TypeVariableName {
@@ -476,7 +476,7 @@ class GenerateBuilderProcessor : SymbolProcessor {
             else -> null
         }
 
-        return TypeVariableName(name.asString(), this.bounds.map { it.asTypeName() }, variance)
+        return TypeVariableName(name.asString(), this.bounds.map { it.asTypeName() }.toList(), variance)
     }
 
     private fun KSTypeArgument.asTypeName(): TypeName {
