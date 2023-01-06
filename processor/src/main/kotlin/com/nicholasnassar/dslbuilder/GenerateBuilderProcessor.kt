@@ -10,6 +10,7 @@ import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 import com.nicholasnassar.dslbuilder.api.annotation.NullValue
 import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import java.util.*
 
 class GenerateBuilderProcessorProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
@@ -268,8 +269,8 @@ class GenerateBuilderProcessor(
             // One of the parameters has a builder,
             // so lets be nice and create a function
             // utilizing the builder.
-            classInfo.wrappedParameters.forEach {
-                val parameter = it.parameter
+            classInfo.wrappedParameters.forEach { wrappedParameter ->
+                val parameter = wrappedParameter.parameter
 
                 val type = parameter.type.asTypeName()
 
@@ -284,8 +285,8 @@ class GenerateBuilderProcessor(
                 val subtypeInfo = getSubtypeInfoFor(type, actualTypeVariablesForClass)
 
                 subtypeInfo.forEach { info ->
-                    val functionName = info.rawSubType.simpleName.decapitalize()
-                    val fixedParameterName = parameterName.capitalize()
+                    val functionName = info.rawSubType.simpleName.replaceFirstChar { it.lowercase(Locale.getDefault()) }
+                    val fixedParameterName = parameterName.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }
 
                     val newFunctionName = if (functionName.endsWith(fixedParameterName)) {
                         functionName
