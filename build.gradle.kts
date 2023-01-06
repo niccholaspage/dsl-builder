@@ -1,3 +1,5 @@
+version = "0.0.1-SNAPSHOT"
+
 plugins {
     kotlin("jvm")
     id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
