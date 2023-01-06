@@ -17,12 +17,10 @@ dependencies {
 publishing {
     repositories {
         maven {
-            val releasesRepoUrl = "https://repo.nicholasnassar.com/releases"
-            val snapshotsRepoUrl = "https://repo.nicholasnassar.com/snapshots"
-            url = uri(if (version.toString().endsWith("SNAPSHOT")) snapshotsRepoUrl else releasesRepoUrl)
+            url = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2")
             credentials {
-                username = System.getenv("REPO_USER")
-                password = System.getenv("REPO_PASSWORD")
+                username = System.getenv("SONATYPE_USER")
+                password = System.getenv("SONATYPE_PASSWORD")
             }
             authentication {
                 create<BasicAuthentication>("basic")
