@@ -1,11 +1,17 @@
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+
+plugins {
+    kotlin("jvm") version "1.8.0"
+    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
+}
+
 allprojects {
     group = "com.nicholasnassar.dslbuilder"
     version = "0.0.1-SNAPSHOT"
-}
 
-plugins {
-    kotlin("jvm")
-    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
+    tasks.withType<KotlinCompile> {
+        kotlinOptions.jvmTarget = "1.8"
+    }
 }
 
 repositories {
