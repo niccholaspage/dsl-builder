@@ -1,4 +1,7 @@
-version = "0.0.1-SNAPSHOT"
+allprojects {
+    group = "com.nicholasnassar.dslbuilder"
+    version = "0.0.1-SNAPSHOT"
+}
 
 plugins {
     kotlin("jvm")

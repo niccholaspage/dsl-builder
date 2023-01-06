@@ -5,8 +5,6 @@ plugins {
     `maven-publish`
 }
 
-group = "com.nicholasnassar.dslbuilder"
-
 repositories {
     mavenCentral()
     google()

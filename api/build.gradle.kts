@@ -7,8 +7,6 @@ repositories {
     mavenCentral()
 }
 
-group = "com.nicholasnassar.dslbuilder"
-
 dependencies {
     implementation(kotlin("stdlib"))
 }
