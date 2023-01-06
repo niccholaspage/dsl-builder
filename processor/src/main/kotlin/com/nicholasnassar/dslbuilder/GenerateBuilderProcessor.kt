@@ -393,7 +393,11 @@ class GenerateBuilderProcessor(
                     .initializer("parentCollection").build()
             )
 
-            val functionName = collectionBuilderInfo.rawTypeArgumentClass.simpleName.decapitalize()
+            val functionName = collectionBuilderInfo.rawTypeArgumentClass.simpleName.replaceFirstChar {
+                it.lowercase(
+                    Locale.getDefault()
+                )
+            }
 
             classBuilder.addFunction(
                 FunSpec.builder(functionName)
@@ -411,7 +415,7 @@ class GenerateBuilderProcessor(
             subtypeInfo.forEach { info ->
                 classBuilder.addFunction(
                     generateBuilderForProperty(
-                        info.rawSubType.simpleName.decapitalize(),
+                        info.rawSubType.simpleName.replaceFirstChar { it.lowercase(Locale.getDefault()) },
                         "parentCollection",
                         getBuilderClassName(info.rawSubType),
                         builderClassName,
@@ -707,7 +711,7 @@ class GenerateBuilderProcessor(
             classBuilder.addFunction(
                 generateFunctionSettingDynamic(
                     propertyName,
-                    "rolling${staticPropertyName.capitalize()}",
+                    "rolling${staticPropertyName.replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString() }}",
                     staticValueType,
                     rollingDynamicValueClass
                 )
