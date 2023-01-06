@@ -12,13 +12,8 @@ import com.squareup.kotlinpoet.*
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 
 class GenerateBuilderProcessorProvider : SymbolProcessorProvider {
-    override fun create(
-        options: Map<String, String>,
-        kotlinVersion: KotlinVersion,
-        codeGenerator: CodeGenerator,
-        logger: KSPLogger
-    ): SymbolProcessor {
-        return GenerateBuilderProcessor(codeGenerator, logger, options)
+    override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor {
+        return GenerateBuilderProcessor(environment.codeGenerator, environment.logger, environment.options)
     }
 }
 
