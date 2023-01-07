@@ -1,8 +1,10 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.dokka.gradle.DokkaTask
+import java.net.URL
 
 plugins {
     kotlin("jvm")
     `maven-publish`
+    id("org.jetbrains.dokka")
 }
 
 repositories {
@@ -13,8 +15,19 @@ dependencies {
     implementation(kotlin("stdlib"))
 }
 
-tasks.withType<KotlinCompile> {
-    kotlinOptions.jvmTarget = "1.8"
+tasks.withType<DokkaTask>().configureEach {
+    dokkaSourceSets {
+        named("main") {
+            moduleName.set("DSL Builder API")
+            sourceLink {
+                localDirectory.set(file("src/main/kotlin"))
+                remoteUrl.set(URL("https://github.com/niccholaspage/dsl-builder/tree/main/api/" +
+                        "/src/main/kotlin"
+                ))
+                remoteLineSuffix.set("#L")
+            }
+        }
+    }
 }
 
 publishing {

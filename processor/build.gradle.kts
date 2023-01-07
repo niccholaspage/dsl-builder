@@ -1,8 +1,12 @@
+import org.jetbrains.dokka.gradle.DokkaTask
+import java.net.URL
+
 val kspVersion: String by project
 
 plugins {
     kotlin("jvm")
     `maven-publish`
+    id("org.jetbrains.dokka")
 }
 
 repositories {
@@ -18,6 +22,21 @@ dependencies {
 
 sourceSets.main {
     java.srcDirs("src/main/kotlin")
+}
+
+tasks.withType<DokkaTask>().configureEach {
+    dokkaSourceSets {
+        named("main") {
+            moduleName.set("DSL Builder Processor")
+            sourceLink {
+                localDirectory.set(file("src/main/kotlin"))
+                remoteUrl.set(URL("https://github.com/niccholaspage/dsl-builder/tree/main/processor/" +
+                        "/src/main/kotlin"
+                ))
+                remoteLineSuffix.set("#L")
+            }
+        }
+    }
 }
 
 publishing {
