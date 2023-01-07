@@ -5,7 +5,7 @@ val kspVersion: String by project
 
 plugins {
     kotlin("jvm")
-    `maven-publish`
+    id("com.vanniktech.maven.publish")
     id("org.jetbrains.dokka")
 }
 
@@ -39,14 +39,6 @@ tasks.withType<DokkaTask>().configureEach {
     }
 }
 
-publishing {
-    publications {
-        create<MavenPublication>("maven") {
-            groupId = group as String
-            artifactId = "dsl-builder-ksp"
-            version = project.version as String
-
-            from(components["java"])
-        }
-    }
+mavenPublishing {
+    coordinates("com.nicholasnassar.dsl-builder", "dsl-builder-ksp", version.toString())
 }
