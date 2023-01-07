@@ -32,7 +32,7 @@ jobs:
           rm -f ~/.gradle/caches/modules-2/modules-2.lock
           rm -f ~/.gradle/caches/modules-2/gc.properties
       - name: Publish to repository
-        run: ./gradlew -d publishToSonatype closeAndReleaseSonatypeStagingRepository
+        run: ./gradlew -i publishToSonatype closeAndReleaseSonatypeStagingRepository
         env:
           ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.SONATYPE_USER }}
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.SONATYPE_PASSWORD }}
