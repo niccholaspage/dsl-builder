@@ -464,14 +464,19 @@ class GenerateBuilderProcessor(
         }
     }
 
+    lateinit var symbols: List<KSAnnotated>
+
     override fun process(resolver: Resolver): List<KSAnnotated> {
         this.resolver = resolver
-        val symbols = resolver.getSymbolsWithAnnotation(GENERATE_BUILDER_ANNOTATION)
-        val ret = symbols.filter { !it.validate() }
+        // TODO: Solve this properly. I shouldn't have to save the result from this I'm pretty sure.
+        if (!::symbols.isInitialized) {
+            symbols = resolver.getSymbolsWithAnnotation(GENERATE_BUILDER_ANNOTATION).toList()
+        }
+        val ret = symbols.filter { !it.validate() }.toList()
         symbols
-            .filter { it is KSClassDeclaration && it.validate() }
+            .filter { it is KSClassDeclaration }
             .map { it.accept(BuilderVisitor(), Unit) }
-        return ret.toList()
+        return ret
     }
 
     private fun KSTypeParameter.asTypeVariableName(): TypeVariableName {
