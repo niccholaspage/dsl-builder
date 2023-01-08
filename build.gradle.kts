@@ -1,3 +1,4 @@
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import com.vanniktech.maven.publish.SonatypeHost
 
 plugins {
@@ -23,7 +24,7 @@ allprojects {
     }
 }
 
-mavenPublishing {
+configure<MavenPublishBaseExtension> {
     publishToMavenCentral(SonatypeHost.S01)
 
     signAllPublications()

@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.jetbrains.dokka.gradle.DokkaTask
 import java.net.URL
 
@@ -34,7 +35,7 @@ tasks.withType<DokkaTask>().configureEach {
     }
 }
 
-mavenPublishing {
+configure<MavenPublishBaseExtension> {
     coordinates("com.nicholasnassar.dslbuilder", "dsl-builder-api", version.toString())
 
     configure(

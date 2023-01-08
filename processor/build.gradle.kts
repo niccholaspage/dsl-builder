@@ -1,5 +1,6 @@
 import com.vanniktech.maven.publish.JavadocJar
 import com.vanniktech.maven.publish.KotlinJvm
+import com.vanniktech.maven.publish.MavenPublishBaseExtension
 import org.jetbrains.dokka.gradle.DokkaTask
 import java.net.URL
 
@@ -34,8 +35,7 @@ tasks.withType<DokkaTask>().configureEach {
                 localDirectory.set(file("src/main/kotlin"))
                 remoteUrl.set(
                     URL(
-                        "https://github.com/niccholaspage/dsl-builder/tree/main/processor/" +
-                                "/src/main/kotlin"
+                        "https://github.com/niccholaspage/dsl-builder/tree/main/processor/" + "/src/main/kotlin"
                     )
                 )
                 remoteLineSuffix.set("#L")
@@ -44,7 +44,7 @@ tasks.withType<DokkaTask>().configureEach {
     }
 }
 
-mavenPublishing {
+configure<MavenPublishBaseExtension> {
     coordinates("com.nicholasnassar.dslbuilder", "dsl-builder-ksp", version.toString())
 
     configure(
