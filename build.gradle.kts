@@ -3,7 +3,7 @@ import com.vanniktech.maven.publish.SonatypeHost
 
 plugins {
     kotlin("jvm") version "1.8.0"
-    id("com.vanniktech.maven.publish.base") version "0.23.1"
+    id("com.vanniktech.maven.publish.base") version "0.23.1" apply false
     id("org.jetbrains.dokka") version "1.7.20"
 }
 
@@ -22,35 +22,37 @@ allprojects {
             options.release.set(16)
         }
     }
-}
 
-configure<MavenPublishBaseExtension> {
-    publishToMavenCentral(SonatypeHost.S01)
+    plugins.withId("com.vanniktech.maven.publish.base") {
+        configure<MavenPublishBaseExtension> {
+            publishToMavenCentral(SonatypeHost.S01)
 
-    signAllPublications()
+            signAllPublications()
 
-    pom {
-        name.set("DSL Builder")
-        description.set("A compile-time dependency that automatically generates DSLs based on annotations attached to your Kotlin classes and properties.")
-        inceptionYear.set("2021")
-        url.set("https://github.com/niccholaspage/dsl-builder/")
-        licenses {
-            license {
-                name.set("The Apache Software License, Version 2.0")
-                url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                distribution.set("repo")
-            }
-
-            scm {
+            pom {
+                name.set("DSL Builder")
+                description.set("A compile-time dependency that automatically generates DSLs based on annotations attached to your Kotlin classes and properties.")
+                inceptionYear.set("2021")
                 url.set("https://github.com/niccholaspage/dsl-builder/")
-                connection.set("scm:git:git://github.com/niccholaspage/dsl-builder.git")
-                developerConnection.set("scm:git:ssh://git@github.com/niccholaspage/dsl-builder.git")
-            }
+                licenses {
+                    license {
+                        name.set("The Apache Software License, Version 2.0")
+                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                        distribution.set("repo")
+                    }
 
-            developers {
-                developer {
-                    id.set("niccholaspage")
-                    name.set("Nicholas Nassar")
+                    scm {
+                        url.set("https://github.com/niccholaspage/dsl-builder/")
+                        connection.set("scm:git:git://github.com/niccholaspage/dsl-builder.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/niccholaspage/dsl-builder.git")
+                    }
+
+                    developers {
+                        developer {
+                            id.set("niccholaspage")
+                            name.set("Nicholas Nassar")
+                        }
+                    }
                 }
             }
         }
