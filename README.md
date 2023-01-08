@@ -12,7 +12,7 @@ package com.example
 import com.nicholasnassar.dslbuilder.api.annotation.GenerateBuilder
 
 @GenerateBuilder
-class Person(val firstName: String, val lastName: String, val pet: Pet2)
+class Person(val firstName: String, val lastName: String, val pet: Pet)
 
 @GenerateBuilder
 open class Pet(val name: String, val breed: String)
@@ -39,7 +39,7 @@ with ```@GenerateBuilder``` and generate builder classes for them. To get starte
 build.gradle.kts file and add the KSP plugin by
 following [this guide](https://kotlinlang.org/docs/ksp-quickstart.html#use-your-own-processor-in-a-project) from the
 Kotlin
-website. Once this is done, you will need to add the DSL Builder API and KSP dependencies to your dependencies list,
+website. Make sure you have added the Maven Central repository to your project as well. Once this is done, you will need to add the DSL Builder API and KSP dependencies to your dependencies list,
 like so:
 
 ```kotlin
@@ -50,6 +50,7 @@ dependencies {
 ```
 
 TODO: Talk about options that need to be passed to processors.
+
 Finally, to make your IDE aware of the generated code from KSP, you will need to follow the guide
 available [here](https://kotlinlang.org/docs/ksp-quickstart.html#make-ide-aware-of-generated-code). This
 will allow for the generated builder classes to show up in autocompletion in your editor, and will stop usages of those
