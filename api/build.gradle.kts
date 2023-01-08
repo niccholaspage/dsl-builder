@@ -35,7 +35,7 @@ tasks.withType<DokkaTask>().configureEach {
 }
 
 mavenPublishing {
-//    coordinates("com.nicholasnassar.dslbuilder", "dsl-builder-api", version.toString())
+    coordinates("com.nicholasnassar.dslbuilder", "dsl-builder-api", version.toString())
 
     configure(
         KotlinJvm(
