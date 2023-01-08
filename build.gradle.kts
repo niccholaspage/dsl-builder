@@ -9,7 +9,7 @@ plugins {
 
 allprojects {
     group = "com.nicholasnassar.dslbuilder"
-    version = "0.0.2-SNAPSHOT"
+    version = "0.0.2"
 
     pluginManager.withPlugin("java") {
         configure<JavaPluginExtension> {
